@@ -8,6 +8,8 @@ const adminRoutes = require('./routes/admin.routes');
 const teamRoutes = require('./routes/team.routes');
 const teamManagementRoutes = require('./routes/teamManagement.routes');
 const statsRoutes = require('./routes/stats.routes');
+const questionRoutes = require('./routes/question.routes');
+const roundRoutes = require('./routes/round.routes');
 
 // Initialize express app
 const app = express();
@@ -28,6 +30,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/team', teamRoutes);
 app.use('/api/teams', teamManagementRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/questions', questionRoutes);
+app.use('/api/rounds', roundRoutes);
 
 // Health check route
 app.get('/api/health', (req, res) => {

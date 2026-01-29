@@ -50,3 +50,42 @@ exports.teamLoginRules = [
     body('teamName').trim().notEmpty().withMessage('Team name is required'),
     body('password').notEmpty().withMessage('Password is required'),
 ];
+
+// Question validation middleware
+exports.validateQuestion = [
+    body('title').trim().notEmpty().withMessage('Question title is required'),
+    body('difficulty')
+        .isIn(['Easy', 'Medium', 'Hard'])
+        .withMessage('Difficulty must be Easy, Medium, or Hard'),
+    body('category').trim().notEmpty().withMessage('Category is required'),
+    body('description').trim().notEmpty().withMessage('Description is required'),
+    body('inputFormat').trim().notEmpty().withMessage('Input format is required'),
+    body('outputFormat').trim().notEmpty().withMessage('Output format is required'),
+    body('constraints').trim().notEmpty().withMessage('Constraints are required'),
+    body('examples')
+        .isArray({ min: 1 })
+        .withMessage('At least one example is required'),
+    body('examples.*.input').trim().notEmpty().withMessage('Example input is required'),
+    body('examples.*.output').trim().notEmpty().withMessage('Example output is required'),
+    body('testCases')
+        .isInt({ min: 1 })
+        .withMessage('At least one test case is required'),
+    exports.validate,
+];
+
+// Round validation middleware
+exports.validateRound = [
+    body('name').trim().notEmpty().withMessage('Round name is required'),
+    body('duration')
+        .isInt({ min: 1 })
+        .withMessage('Duration must be at least 1 minute'),
+    body('questions')
+        .optional()
+        .isArray()
+        .withMessage('Questions must be an array'),
+    body('status')
+        .optional()
+        .isIn(['upcoming', 'active', 'completed'])
+        .withMessage('Status must be upcoming, active, or completed'),
+    exports.validate,
+];

@@ -1,67 +1,98 @@
 import { useState, useEffect } from 'react';
 import { Play, Pause, Square, Clock, AlertCircle } from 'lucide-react';
+import {
+  getAllRounds,
+  updateRoundStatus,
+  Round as APIRound,
+} from '../../services/round.service';
 
 interface Round {
-  id: string;
+  _id: string;
   name: string;
   duration: number;
-  status: 'not-started' | 'active' | 'paused' | 'completed';
+  status: 'upcoming' | 'active' | 'completed';
   elapsedTime: number; // in seconds
+  startTime?: string;
+  endTime?: string;
+  questions: any[];
 }
 
 export function RoundControlSection() {
-  const [rounds, setRounds] = useState<Round[]>([
-    {
-      id: '1',
-      name: 'Qualifier Round',
-      duration: 60,
-      status: 'completed',
-      elapsedTime: 3600,
-    },
-    {
-      id: '2',
-      name: 'Semi Finals',
-      duration: 90,
-      status: 'not-started',
-      elapsedTime: 0,
-    },
-    {
-      id: '3',
-      name: 'Finals',
-      duration: 120,
-      status: 'not-started',
-      elapsedTime: 0,
-    },
-  ]);
-
-  const [selectedRound, setSelectedRound] = useState<Round | null>(null);
+  const [rounds, setRounds] = useState<Round[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    fetchRounds();
     const interval = setInterval(() => {
-      setRounds((prevRounds) =>
-        prevRounds.map((round) => {
-          if (round.status === 'active') {
-            const newElapsedTime = round.elapsedTime + 1;
-            const maxTime = round.duration * 60;
-            
-            if (newElapsedTime >= maxTime) {
-              return { ...round, elapsedTime: maxTime, status: 'completed' as const };
-            }
-            return { ...round, elapsedTime: newElapsedTime };
-          }
-          return round;
-        })
-      );
+      fetchRounds();
+      updateElapsedTimes();
     }, 1000);
 
     return () => clearInterval(interval);
   }, []);
 
+  const fetchRounds = async () => {
+    try {
+      const data = await getAllRounds();
+      setRounds(data.map(r => ({
+        ...r,
+        elapsedTime: calculateElapsedTime(r),
+        status: mapStatus(r.status),
+      })));
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching rounds:', err);
+      setLoading(false);
+    }
+  };
+
+  const mapStatus = (status: string): 'upcoming' | 'active' | 'completed' => {
+    if (status === 'upcoming') return 'upcoming';
+    if (status === 'active') return 'active';
+    return 'completed';
+  };
+
+  const calculateElapsedTime = (round: APIRound): number => {
+    if (!round.startTime || round.status !== 'active') return 0;
+    const start = new Date(round.startTime).getTime();
+    const now = Date.now();
+    return Math.floor((now - start) / 1000);
+  };
+
+  const updateElapsedTimes = () => {
+    setRounds(prevRounds =>
+      prevRounds.map(round => {
+        if (round.status === 'active' && round.startTime) {
+          const newElapsedTime = calculateElapsedTime(round as any);
+          const maxTime = round.duration * 60;
+
+          if (newElapsedTime >= maxTime) {
+            // Auto-complete round when time is up
+            handleStatusChange(round._id, 'completed');
+            return { ...round, elapsedTime: maxTime };
+          }
+          return { ...round, elapsedTime: newElapsedTime };
+        }
+        return round;
+      })
+    );
+  };
+
+  const handleStatusChange = async (roundId: string, newStatus: 'upcoming' | 'active' | 'completed') => {
+    try {
+      await updateRoundStatus(roundId, newStatus);
+      await fetchRounds();
+    } catch (err) {
+      console.error('Error updating round status:', err);
+      alert('Failed to update round status');
+    }
+  };
+
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     if (hours > 0) {
       return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
@@ -80,66 +111,51 @@ export function RoundControlSection() {
   };
 
   const handleStart = (roundId: string) => {
-    setRounds(
-      rounds.map((round) =>
-        round.id === roundId ? { ...round, status: 'active' as const } : round
-      )
-    );
+    handleStatusChange(roundId, 'active');
   };
 
   const handlePause = (roundId: string) => {
-    setRounds(
-      rounds.map((round) =>
-        round.id === roundId ? { ...round, status: 'paused' as const } : round
-      )
-    );
+    // Note: Backend doesn't have pause, so we'll use upcoming status
+    handleStatusChange(roundId, 'upcoming');
   };
 
   const handleResume = (roundId: string) => {
-    setRounds(
-      rounds.map((round) =>
-        round.id === roundId ? { ...round, status: 'active' as const } : round
-      )
-    );
+    handleStatusChange(roundId, 'active');
   };
 
   const handleStop = (roundId: string) => {
     if (confirm('Are you sure you want to stop this round? This action cannot be undone.')) {
-      setRounds(
-        rounds.map((round) =>
-          round.id === roundId ? { ...round, status: 'completed' as const } : round
-        )
-      );
+      handleStatusChange(roundId, 'completed');
     }
   };
 
   const handleReset = (roundId: string) => {
     if (confirm('Are you sure you want to reset this round?')) {
-      setRounds(
-        rounds.map((round) =>
-          round.id === roundId
-            ? { ...round, status: 'not-started' as const, elapsedTime: 0 }
-            : round
-        )
-      );
+      handleStatusChange(roundId, 'upcoming');
     }
   };
 
   const statusColors = {
-    'not-started': 'text-gray-500 bg-gray-500/10',
-    active: 'text-green-500 bg-green-500/10',
-    paused: 'text-yellow-500 bg-yellow-500/10',
-    completed: 'text-blue-500 bg-blue-500/10',
+    'upcoming': 'text-gray-500 bg-gray-500/10',
+    'active': 'text-green-500 bg-green-500/10',
+    'completed': 'text-blue-500 bg-blue-500/10',
   };
 
   const statusLabels = {
-    'not-started': 'Not Started',
-    active: 'Active',
-    paused: 'Paused',
-    completed: 'Completed',
+    'upcoming': 'Not Started',
+    'active': 'Active',
+    'completed': 'Completed',
   };
 
   const activeRound = rounds.find((r) => r.status === 'active');
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-gray-400">Loading rounds...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -171,21 +187,19 @@ export function RoundControlSection() {
 
           return (
             <div
-              key={round.id}
-              className={`bg-zinc-900 border rounded-xl p-6 transition-all ${
-                round.status === 'active'
+              key={round._id}
+              className={`bg-zinc-900 border rounded-xl p-6 transition-all ${round.status === 'active'
                   ? 'border-green-500 shadow-lg shadow-green-500/20'
                   : 'border-zinc-800'
-              }`}
+                }`}
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-xl font-bold text-white">{round.name}</h3>
                     <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        statusColors[round.status]
-                      }`}
+                      className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[round.status]
+                        }`}
                     >
                       {statusLabels[round.status]}
                     </span>
@@ -202,9 +216,8 @@ export function RoundControlSection() {
                     <span className="text-sm text-gray-400">Time Remaining</span>
                   </div>
                   <span
-                    className={`text-2xl font-bold font-mono ${
-                      isWarning ? 'text-red-500' : 'text-white'
-                    }`}
+                    className={`text-2xl font-bold font-mono ${isWarning ? 'text-red-500' : 'text-white'
+                      }`}
                   >
                     {formatTime(timeRemaining)}
                   </span>
@@ -213,15 +226,14 @@ export function RoundControlSection() {
                 {/* Progress Bar */}
                 <div className="w-full bg-zinc-800 rounded-full h-3 overflow-hidden">
                   <div
-                    className={`h-full transition-all duration-1000 ${
-                      isWarning
+                    className={`h-full transition-all duration-1000 ${isWarning
                         ? 'bg-red-500'
                         : round.status === 'active'
-                        ? 'bg-green-500'
-                        : round.status === 'completed'
-                        ? 'bg-blue-500'
-                        : 'bg-gray-500'
-                    }`}
+                          ? 'bg-green-500'
+                          : round.status === 'completed'
+                            ? 'bg-blue-500'
+                            : 'bg-gray-500'
+                      }`}
                     style={{ width: `${progress}%` }}
                   />
                 </div>
@@ -234,9 +246,9 @@ export function RoundControlSection() {
 
               {/* Control Buttons */}
               <div className="flex gap-3">
-                {round.status === 'not-started' && (
+                {round.status === 'upcoming' && (
                   <button
-                    onClick={() => handleStart(round.id)}
+                    onClick={() => handleStart(round._id)}
                     className="flex-1 bg-white text-black py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
                   >
                     <Play className="w-5 h-5" />
@@ -247,33 +259,14 @@ export function RoundControlSection() {
                 {round.status === 'active' && (
                   <>
                     <button
-                      onClick={() => handlePause(round.id)}
+                      onClick={() => handlePause(round._id)}
                       className="flex-1 bg-yellow-500/10 text-yellow-500 border border-yellow-500/30 py-3 rounded-lg font-medium hover:bg-yellow-500/20 transition-colors flex items-center justify-center gap-2"
                     >
                       <Pause className="w-5 h-5" />
                       Pause
                     </button>
                     <button
-                      onClick={() => handleStop(round.id)}
-                      className="flex-1 bg-red-500/10 text-red-500 border border-red-500/30 py-3 rounded-lg font-medium hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Square className="w-5 h-5" />
-                      Stop
-                    </button>
-                  </>
-                )}
-
-                {round.status === 'paused' && (
-                  <>
-                    <button
-                      onClick={() => handleResume(round.id)}
-                      className="flex-1 bg-white text-black py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Play className="w-5 h-5" />
-                      Resume
-                    </button>
-                    <button
-                      onClick={() => handleStop(round.id)}
+                      onClick={() => handleStop(round._id)}
                       className="flex-1 bg-red-500/10 text-red-500 border border-red-500/30 py-3 rounded-lg font-medium hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
                     >
                       <Square className="w-5 h-5" />
@@ -284,7 +277,7 @@ export function RoundControlSection() {
 
                 {round.status === 'completed' && (
                   <button
-                    onClick={() => handleReset(round.id)}
+                    onClick={() => handleReset(round._id)}
                     className="flex-1 bg-zinc-800 text-white py-3 rounded-lg font-medium hover:bg-zinc-700 transition-colors"
                   >
                     Reset Round

@@ -20,6 +20,13 @@ export function AdminDashboard() {
   const [activeSection, setActiveSection] = useState<Section>('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
+  const handleLogout = () => {
+    // Clear the token from localStorage
+    localStorage.removeItem('token');
+    // Redirect to login page
+    window.location.href = '/admin-auth';
+  };
+
   const navItems = [
     { id: 'overview' as Section, label: 'Overview', icon: LayoutDashboard },
     { id: 'questions' as Section, label: 'Questions', icon: FileQuestion },
@@ -60,7 +67,10 @@ export function AdminDashboard() {
         </nav>
 
         <div className="p-4 border-t border-zinc-800">
-          <button className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:bg-zinc-800 hover:text-white transition-all">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-400 hover:bg-zinc-800 hover:text-white transition-all"
+          >
             <LogOut className="w-5 h-5" />
             <span className="font-medium">Logout</span>
           </button>
@@ -95,7 +105,7 @@ export function AdminDashboard() {
 
         {/* Content Area */}
         <main className="flex-1 p-6 overflow-auto">
-          {activeSection === 'overview' && <OverviewSection />}
+          {activeSection === 'overview' && <OverviewSection onNavigate={setActiveSection} />}
           {activeSection === 'questions' && <QuestionsSection />}
           {activeSection === 'rounds' && <RoundsSection />}
           {activeSection === 'teams' && <TeamsSection />}
@@ -106,18 +116,23 @@ export function AdminDashboard() {
   );
 }
 
-function OverviewSection() {
+function OverviewSection({ onNavigate }: { onNavigate: (section: Section) => void }) {
   const [stats, setStats] = useState({
     totalTeams: 0,
     pendingApprovals: 0,
     totalQuestions: 0,
     activeRounds: 0,
   });
+  const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     fetchStats();
+    fetchActivities();
+    // Refresh activities every 30 seconds
+    const interval = setInterval(fetchActivities, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchStats = async () => {
@@ -138,6 +153,27 @@ function OverviewSection() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchActivities = async () => {
+    try {
+      const { getRecentActivity } = await import('../services/stats.service');
+      const data = await getRecentActivity(5);
+      setActivities(data);
+    } catch (err) {
+      console.error('Error fetching activities:', err);
+    }
+  };
+
+  const getTimeAgo = (timestamp: string) => {
+    const now = new Date();
+    const then = new Date(timestamp);
+    const seconds = Math.floor((now.getTime() - then.getTime()) / 1000);
+
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} minutes ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
+    return `${Math.floor(seconds / 86400)} days ago`;
   };
 
   const statsDisplay = [
@@ -193,22 +229,34 @@ function OverviewSection() {
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
         <h3 className="text-lg font-semibold text-white mb-4">Quick Actions</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <button className="bg-black border border-zinc-800 rounded-lg p-4 text-left hover:border-zinc-600 transition-colors">
+          <button
+            onClick={() => onNavigate('questions')}
+            className="bg-black border border-zinc-800 rounded-lg p-4 text-left hover:border-zinc-600 transition-colors"
+          >
             <FileQuestion className="w-6 h-6 text-gray-400 mb-2" />
             <p className="text-white font-medium">Add Question</p>
             <p className="text-xs text-gray-400 mt-1">Create new DSA problem</p>
           </button>
-          <button className="bg-black border border-zinc-800 rounded-lg p-4 text-left hover:border-zinc-600 transition-colors">
+          <button
+            onClick={() => onNavigate('rounds')}
+            className="bg-black border border-zinc-800 rounded-lg p-4 text-left hover:border-zinc-600 transition-colors"
+          >
             <Layers className="w-6 h-6 text-gray-400 mb-2" />
             <p className="text-white font-medium">Create Round</p>
             <p className="text-xs text-gray-400 mt-1">Setup new contest round</p>
           </button>
-          <button className="bg-black border border-zinc-800 rounded-lg p-4 text-left hover:border-zinc-600 transition-colors">
+          <button
+            onClick={() => onNavigate('teams')}
+            className="bg-black border border-zinc-800 rounded-lg p-4 text-left hover:border-zinc-600 transition-colors"
+          >
             <Users className="w-6 h-6 text-gray-400 mb-2" />
             <p className="text-white font-medium">Review Teams</p>
             <p className="text-xs text-gray-400 mt-1">Approve pending teams</p>
           </button>
-          <button className="bg-black border border-zinc-800 rounded-lg p-4 text-left hover:border-zinc-600 transition-colors">
+          <button
+            onClick={() => onNavigate('control')}
+            className="bg-black border border-zinc-800 rounded-lg p-4 text-left hover:border-zinc-600 transition-colors"
+          >
             <PlayCircle className="w-6 h-6 text-gray-400 mb-2" />
             <p className="text-white font-medium">Start Round</p>
             <p className="text-xs text-gray-400 mt-1">Begin contest round</p>
@@ -220,20 +268,19 @@ function OverviewSection() {
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
         <h3 className="text-lg font-semibold text-white mb-4">Recent Activity</h3>
         <div className="space-y-3">
-          {[
-            { action: 'Team "Code Warriors" registered', time: '5 minutes ago' },
-            { action: 'Round 1 completed successfully', time: '1 hour ago' },
-            { action: 'Question "Binary Search Tree" added', time: '2 hours ago' },
-            { action: 'Team "Debug Squad" approved', time: '3 hours ago' },
-          ].map((activity, index) => (
-            <div
-              key={index}
-              className="flex items-center justify-between py-2 border-b border-zinc-800 last:border-0"
-            >
-              <p className="text-gray-300">{activity.action}</p>
-              <p className="text-sm text-gray-500">{activity.time}</p>
-            </div>
-          ))}
+          {activities.length === 0 ? (
+            <p className="text-gray-400 text-center py-4">No recent activity</p>
+          ) : (
+            activities.map((activity, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between py-2 border-b border-zinc-800 last:border-0"
+              >
+                <p className="text-gray-300">{activity.action}</p>
+                <p className="text-sm text-gray-500">{getTimeAgo(activity.timestamp)}</p>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
