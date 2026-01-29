@@ -1,7 +1,10 @@
 require('dotenv').config();
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const cors = require('cors');
 const connectDB = require('./config/database');
+const { initializeSocket, getLeaderboardData } = require('./socket');
 
 // Import routes
 const adminRoutes = require('./routes/admin.routes');
@@ -13,13 +16,43 @@ const roundRoutes = require('./routes/round.routes');
 
 // Initialize express app
 const app = express();
+const server = http.createServer(app);
+
+// Initialize Socket.IO with CORS
+const io = new Server(server, {
+    cors: {
+        origin: process.env.CLIENT_URL || 'http://localhost:5173',
+        methods: ['GET', 'POST'],
+        credentials: true,
+    },
+});
+
+// Initialize socket utility
+initializeSocket(io);
+
+// Socket.IO connection handler
+io.on('connection', async (socket) => {
+    console.log('Client connected:', socket.id);
+
+    // Send current leaderboard on connection
+    try {
+        const leaderboard = await getLeaderboardData();
+        socket.emit('leaderboard:update', leaderboard);
+    } catch (error) {
+        console.error('Error sending initial leaderboard:', error);
+    }
+
+    socket.on('disconnect', () => {
+        console.log('Client disconnected:', socket.id);
+    });
+});
 
 // Connect to database
 connectDB();
 
 // Middleware
 app.use(cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    origin: process.env.CLIENT_URL || 'http://localhost:5173',
     credentials: true,
 }));
 app.use(express.json());
@@ -62,6 +95,7 @@ app.use((req, res) => {
 
 // Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+    console.log(`WebSocket server ready on port ${PORT}`);
 });

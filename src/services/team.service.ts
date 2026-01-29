@@ -1,19 +1,127 @@
 import api from './api';
 
-// Get all teams with optional status filter
+export interface TeamMember {
+    name: string;
+    email: string;
+}
+
+export interface TeamRegistrationData {
+    teamName: string;
+    password: string;
+    members: TeamMember[];
+}
+
+export interface TeamLoginData {
+    teamName: string;
+    password: string;
+}
+
+export interface TeamStats {
+    teamName: string;
+    members: TeamMember[];
+    points: number;
+    rank: number;
+    tokens: {
+        sabotage: number;
+        shield: number;
+    };
+    activeRoundsCount: number;
+}
+
+export interface TeamActivity {
+    type: 'submission' | 'purchase';
+    action: string;
+    points: string;
+    timestamp: string;
+    status: 'success' | 'neutral' | 'purchase';
+}
+
+export interface LeaderboardTeam {
+    rank: number;
+    teamName: string;
+    points: number;
+    memberCount: number;
+    tokens: {
+        sabotage: number;
+        shield: number;
+    };
+}
+
+/**
+ * Register a new team
+ */
+export const registerTeam = async (data: TeamRegistrationData) => {
+    const response = await api.post('/team/register', data);
+    return response.data;
+};
+
+/**
+ * Login team
+ */
+export const loginTeam = async (data: TeamLoginData) => {
+    const response = await api.post('/team/login', data);
+    if (response.data.token) {
+        localStorage.setItem('token', response.data.token);
+    }
+    return response.data;
+};
+
+/**
+ * Get team profile
+ */
+export const getTeamProfile = async () => {
+    const response = await api.get('/team/profile');
+    return response.data.team;
+};
+
+/**
+ * Get team stats (points, rank, tokens, active rounds)
+ */
+export const getTeamStats = async (): Promise<TeamStats> => {
+    const response = await api.get('/team/stats');
+    return response.data.data;
+};
+
+/**
+ * Get team recent activity
+ */
+export const getTeamActivity = async (limit: number = 10): Promise<TeamActivity[]> => {
+    const response = await api.get(`/team/activity?limit=${limit}`);
+    return response.data.data;
+};
+
+/**
+ * Get leaderboard (all teams ranked by points)
+ */
+export const getLeaderboard = async (): Promise<LeaderboardTeam[]> => {
+    const response = await api.get('/team/leaderboard');
+    return response.data.data;
+};
+
+// ============================================
+// Admin Team Management Functions
+// ============================================
+
+/**
+ * Get all teams with optional status filter (Admin only)
+ */
 export const getAllTeams = async (status?: 'pending' | 'approved' | 'rejected') => {
     const params = status ? { status } : {};
     const response = await api.get('/teams', { params });
     return response.data;
 };
 
-// Approve a team
+/**
+ * Approve a team (Admin only)
+ */
 export const approveTeam = async (teamId: string) => {
     const response = await api.put(`/teams/${teamId}/approve`);
     return response.data;
 };
 
-// Reject a team
+/**
+ * Reject a team (Admin only)
+ */
 export const rejectTeam = async (teamId: string) => {
     const response = await api.put(`/teams/${teamId}/reject`);
     return response.data;

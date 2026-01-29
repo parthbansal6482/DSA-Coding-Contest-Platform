@@ -50,6 +50,18 @@ const teamSchema = new mongoose.Schema(
             enum: ['pending', 'approved', 'rejected'],
             default: 'pending',
         },
+        points: {
+            type: Number,
+            default: 0,
+        },
+        sabotageTokens: {
+            type: Number,
+            default: 0,
+        },
+        shieldTokens: {
+            type: Number,
+            default: 0,
+        },
         registrationDate: {
             type: Date,
             default: Date.now,

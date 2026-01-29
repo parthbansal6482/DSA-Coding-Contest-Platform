@@ -1,22 +1,45 @@
+import { useState, useEffect } from 'react';
 import { Users, Award, Target, Clock } from 'lucide-react';
+import { getTeamActivity, TeamActivity, TeamStats } from '../../services/team.service';
 
-interface TeamData {
-  teamName: string;
-  points: number;
-  rank: number;
-  tokens: {
-    sabotage: number;
-    shield: number;
+export function DashboardHome({ teamData }: { teamData: TeamStats }) {
+  const [activities, setActivities] = useState<TeamActivity[]>([]);
+  const [loadingActivity, setLoadingActivity] = useState(true);
+
+  useEffect(() => {
+    fetchActivity();
+    // Refresh activity every 30 seconds
+    const interval = setInterval(fetchActivity, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchActivity = async () => {
+    try {
+      const data = await getTeamActivity(4);
+      setActivities(data);
+    } catch (err) {
+      console.error('Error fetching activity:', err);
+    } finally {
+      setLoadingActivity(false);
+    }
   };
-  members: string[];
-}
 
-export function DashboardHome({ teamData }: { teamData: TeamData }) {
+  const getTimeAgo = (timestamp: string) => {
+    const now = new Date();
+    const then = new Date(timestamp);
+    const seconds = Math.floor((now.getTime() - then.getTime()) / 1000);
+
+    if (seconds < 60) return 'Just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} mins ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)} hours ago`;
+    return `${Math.floor(seconds / 86400)} days ago`;
+  };
+
   const stats = [
     { label: 'Total Points', value: teamData.points.toString(), icon: Award, color: 'text-yellow-500' },
     { label: 'Current Rank', value: `#${teamData.rank}`, icon: Target, color: 'text-blue-500' },
     { label: 'Team Members', value: teamData.members.length.toString(), icon: Users, color: 'text-green-500' },
-    { label: 'Active Rounds', value: '2', icon: Clock, color: 'text-purple-500' },
+    { label: 'Active Rounds', value: teamData.activeRoundsCount.toString(), icon: Clock, color: 'text-purple-500' },
   ];
 
   return (
@@ -57,12 +80,12 @@ export function DashboardHome({ teamData }: { teamData: TeamData }) {
             >
               <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center">
                 <span className="text-white font-medium">
-                  {member.split(' ').map((n) => n[0]).join('')}
+                  {member.name.split(' ').map((n) => n[0]).join('')}
                 </span>
               </div>
               <div>
-                <p className="text-white font-medium">{member}</p>
-                <p className="text-sm text-gray-400">Member {index + 1}</p>
+                <p className="text-white font-medium">{member.name}</p>
+                <p className="text-sm text-gray-400">{member.email}</p>
               </div>
             </div>
           ))}
@@ -73,33 +96,33 @@ export function DashboardHome({ teamData }: { teamData: TeamData }) {
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
         <h3 className="text-lg font-semibold text-white mb-4">Recent Activity</h3>
         <div className="space-y-3">
-          {[
-            { action: 'Completed "Two Sum"', points: '+100 points', time: '5 mins ago', type: 'success' },
-            { action: 'Attempted "Binary Tree"', points: 'No points', time: '15 mins ago', type: 'neutral' },
-            { action: 'Purchased Shield Token', points: '-200 points', time: '30 mins ago', type: 'purchase' },
-            { action: 'Completed "Valid Parentheses"', points: '+80 points', time: '1 hour ago', type: 'success' },
-          ].map((activity, index) => (
-            <div
-              key={index}
-              className="flex items-center justify-between py-3 border-b border-zinc-800 last:border-0"
-            >
-              <div>
-                <p className="text-gray-300">{activity.action}</p>
-                <p className="text-sm text-gray-500 mt-1">{activity.time}</p>
-              </div>
-              <span
-                className={`text-sm font-medium ${
-                  activity.type === 'success'
-                    ? 'text-green-500'
-                    : activity.type === 'purchase'
-                    ? 'text-yellow-500'
-                    : 'text-gray-500'
-                }`}
+          {loadingActivity ? (
+            <p className="text-gray-400 text-center py-4">Loading activity...</p>
+          ) : activities.length === 0 ? (
+            <p className="text-gray-400 text-center py-4">No recent activity</p>
+          ) : (
+            activities.map((activity, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between py-3 border-b border-zinc-800 last:border-0"
               >
-                {activity.points}
-              </span>
-            </div>
-          ))}
+                <div>
+                  <p className="text-gray-300">{activity.action}</p>
+                  <p className="text-sm text-gray-500 mt-1">{getTimeAgo(activity.timestamp)}</p>
+                </div>
+                <span
+                  className={`text-sm font-medium ${activity.status === 'success'
+                      ? 'text-green-500'
+                      : activity.status === 'purchase'
+                        ? 'text-yellow-500'
+                        : 'text-gray-500'
+                    }`}
+                >
+                  {activity.points}
+                </span>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

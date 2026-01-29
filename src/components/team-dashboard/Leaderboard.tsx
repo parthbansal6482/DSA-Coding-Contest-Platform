@@ -1,81 +1,46 @@
-import { Trophy, Medal, Award, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-
-interface LeaderboardTeam {
-  rank: number;
-  teamName: string;
-  points: number;
-  questionsCompleted: number;
-  lastSubmission: string;
-  rankChange: number; // positive = up, negative = down, 0 = no change
-}
+import { useState, useEffect } from 'react';
+import { Trophy, Medal, Award } from 'lucide-react';
+import { getLeaderboard, LeaderboardTeam } from '../../services/team.service';
+import { socketService } from '../../services/socket.service';
 
 export function Leaderboard({ currentTeam }: { currentTeam: string }) {
-  const teams: LeaderboardTeam[] = [
-    {
-      rank: 1,
-      teamName: 'Algorithm Aces',
-      points: 1250,
-      questionsCompleted: 12,
-      lastSubmission: '2 mins ago',
-      rankChange: 2,
-    },
-    {
-      rank: 2,
-      teamName: 'Binary Beasts',
-      points: 980,
-      questionsCompleted: 10,
-      lastSubmission: '5 mins ago',
-      rankChange: -1,
-    },
-    {
-      rank: 3,
-      teamName: 'Code Warriors',
-      points: 850,
-      questionsCompleted: 9,
-      lastSubmission: '8 mins ago',
-      rankChange: 1,
-    },
-    {
-      rank: 4,
-      teamName: 'Debug Squad',
-      points: 720,
-      questionsCompleted: 8,
-      lastSubmission: '12 mins ago',
-      rankChange: -2,
-    },
-    {
-      rank: 5,
-      teamName: 'Runtime Rebels',
-      points: 680,
-      questionsCompleted: 7,
-      lastSubmission: '15 mins ago',
-      rankChange: 0,
-    },
-    {
-      rank: 6,
-      teamName: 'Stack Overflow',
-      points: 620,
-      questionsCompleted: 7,
-      lastSubmission: '18 mins ago',
-      rankChange: 1,
-    },
-    {
-      rank: 7,
-      teamName: 'Null Pointers',
-      points: 580,
-      questionsCompleted: 6,
-      lastSubmission: '20 mins ago',
-      rankChange: -1,
-    },
-    {
-      rank: 8,
-      teamName: 'Syntax Heroes',
-      points: 540,
-      questionsCompleted: 6,
-      lastSubmission: '25 mins ago',
-      rankChange: 0,
-    },
-  ];
+  const [teams, setTeams] = useState<LeaderboardTeam[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    // Connect to WebSocket
+    socketService.connect();
+
+    // Initial fetch
+    fetchLeaderboard();
+
+    // Subscribe to real-time updates
+    const unsubscribe = socketService.onLeaderboardUpdate((data) => {
+      console.log('Real-time leaderboard update received');
+      setTeams(data);
+      setError('');
+      setLoading(false);
+    });
+
+    // Cleanup on unmount
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  const fetchLeaderboard = async () => {
+    try {
+      const data = await getLeaderboard();
+      setTeams(data);
+      setError('');
+    } catch (err: any) {
+      console.error('Error fetching leaderboard:', err);
+      setError('Failed to load leaderboard');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getRankIcon = (rank: number) => {
     switch (rank) {
@@ -90,28 +55,30 @@ export function Leaderboard({ currentTeam }: { currentTeam: string }) {
     }
   };
 
-  const getRankChangeIndicator = (change: number) => {
-    if (change > 0) {
-      return (
-        <div className="flex items-center gap-1 text-green-500 text-xs">
-          <TrendingUp className="w-3 h-3" />
-          <span>+{change}</span>
-        </div>
-      );
-    } else if (change < 0) {
-      return (
-        <div className="flex items-center gap-1 text-red-500 text-xs">
-          <TrendingDown className="w-3 h-3" />
-          <span>{change}</span>
-        </div>
-      );
-    }
+  if (loading) {
     return (
-      <div className="flex items-center gap-1 text-gray-500 text-xs">
-        <Minus className="w-3 h-3" />
+      <div className="flex items-center justify-center py-12">
+        <div className="text-white text-xl">Loading leaderboard...</div>
       </div>
     );
-  };
+  }
+
+  if (error || teams.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-red-500 text-xl mb-4">{error || 'No teams found'}</p>
+        <button
+          onClick={fetchLeaderboard}
+          className="px-6 py-2 bg-white text-black rounded-lg hover:bg-gray-200 transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  const currentTeamData = teams.find((t) => t.teamName === currentTeam);
+  const topTeam = teams[0];
 
   return (
     <div className="space-y-6">
@@ -122,34 +89,34 @@ export function Leaderboard({ currentTeam }: { currentTeam: string }) {
       </div>
 
       {/* Top 3 Podium */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
-        {teams.slice(0, 3).map((team, index) => (
-          <div
-            key={team.teamName}
-            className={`${
-              index === 0 ? 'order-2' : index === 1 ? 'order-1' : 'order-3'
-            } ${index === 0 ? 'transform scale-105' : ''}`}
-          >
+      {teams.length >= 3 && (
+        <div className="grid grid-cols-3 gap-4 mb-8">
+          {teams.slice(0, 3).map((team, index) => (
             <div
-              className={`bg-zinc-900 border rounded-xl p-6 text-center ${
-                team.teamName === currentTeam
+              key={team.teamName}
+              className={`${index === 0 ? 'order-2' : index === 1 ? 'order-1' : 'order-3'
+                } ${index === 0 ? 'transform scale-105' : ''}`}
+            >
+              <div
+                className={`bg-zinc-900 border rounded-xl p-6 text-center ${team.teamName === currentTeam
                   ? 'border-white shadow-lg shadow-white/10'
                   : 'border-zinc-800'
-              }`}
-            >
-              <div className="flex justify-center mb-3">
-                {getRankIcon(team.rank)}
-              </div>
-              <h3 className="text-lg font-bold text-white mb-1">{team.teamName}</h3>
-              <p className="text-3xl font-bold text-white mb-2">{team.points}</p>
-              <p className="text-sm text-gray-400">points</p>
-              <div className="mt-3 flex justify-center">
-                {getRankChangeIndicator(team.rankChange)}
+                  }`}
+              >
+                <div className="flex justify-center mb-3">
+                  {getRankIcon(team.rank)}
+                </div>
+                <h3 className="text-lg font-bold text-white mb-1">{team.teamName}</h3>
+                <p className="text-3xl font-bold text-white mb-2">{team.points}</p>
+                <p className="text-sm text-gray-400">points</p>
+                <div className="mt-3 text-xs text-gray-500">
+                  {team.memberCount} members
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Full Leaderboard Table */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
@@ -160,22 +127,18 @@ export function Leaderboard({ currentTeam }: { currentTeam: string }) {
                 <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Rank</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Team</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Points</th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Completed</th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">
-                  Last Submission
-                </th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Trend</th>
+                <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Members</th>
+                <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Tokens</th>
               </tr>
             </thead>
             <tbody>
               {teams.map((team) => (
                 <tr
                   key={team.teamName}
-                  className={`border-b border-zinc-800 last:border-0 transition-colors ${
-                    team.teamName === currentTeam
-                      ? 'bg-white/5'
-                      : 'hover:bg-zinc-800/50'
-                  }`}
+                  className={`border-b border-zinc-800 last:border-0 transition-colors ${team.teamName === currentTeam
+                    ? 'bg-white/5'
+                    : 'hover:bg-zinc-800/50'
+                    }`}
                 >
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
@@ -189,9 +152,8 @@ export function Leaderboard({ currentTeam }: { currentTeam: string }) {
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       <span
-                        className={`font-medium ${
-                          team.teamName === currentTeam ? 'text-white' : 'text-gray-300'
-                        }`}
+                        className={`font-medium ${team.teamName === currentTeam ? 'text-white' : 'text-gray-300'
+                          }`}
                       >
                         {team.teamName}
                       </span>
@@ -206,12 +168,14 @@ export function Leaderboard({ currentTeam }: { currentTeam: string }) {
                     <span className="text-white font-bold">{team.points}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-gray-400">{team.questionsCompleted} questions</span>
+                    <span className="text-gray-400">{team.memberCount} members</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-gray-400 text-sm">{team.lastSubmission}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-red-500 text-sm">⚡ {team.tokens.sabotage}</span>
+                      <span className="text-blue-500 text-sm">🛡️ {team.tokens.shield}</span>
+                    </div>
                   </td>
-                  <td className="px-6 py-4">{getRankChangeIndicator(team.rankChange)}</td>
                 </tr>
               ))}
             </tbody>
@@ -224,13 +188,13 @@ export function Leaderboard({ currentTeam }: { currentTeam: string }) {
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
           <p className="text-gray-400 text-sm mb-1">Your Rank</p>
           <p className="text-2xl font-bold text-white">
-            #{teams.find((t) => t.teamName === currentTeam)?.rank}
+            #{currentTeamData?.rank || '-'}
           </p>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
           <p className="text-gray-400 text-sm mb-1">Points Gap (to #1)</p>
           <p className="text-2xl font-bold text-white">
-            {teams[0].points - (teams.find((t) => t.teamName === currentTeam)?.points || 0)}
+            {currentTeamData ? topTeam.points - currentTeamData.points : '-'}
           </p>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">

@@ -134,3 +134,132 @@ exports.getProfile = async (req, res) => {
         });
     }
 };
+
+// @desc    Get team stats (points, rank, tokens, active rounds)
+// @route   GET /api/team/stats
+// @access  Private (Team)
+exports.getTeamStats = async (req, res) => {
+    try {
+        const team = req.team;
+        const Round = require('../models/Round');
+
+        // Get all approved teams sorted by points to calculate rank
+        const allTeams = await Team.find({ status: 'approved' })
+            .sort({ points: -1 })
+            .select('_id points');
+
+        // Find current team's rank
+        const rank = allTeams.findIndex(t => t._id.toString() === team._id.toString()) + 1;
+
+        // Get active rounds count
+        const activeRoundsCount = await Round.countDocuments({ status: 'active' });
+
+        res.status(200).json({
+            success: true,
+            data: {
+                teamName: team.teamName,
+                members: team.members,
+                points: team.points || 0,
+                rank: rank || 0,
+                tokens: {
+                    sabotage: team.sabotageTokens || 0,
+                    shield: team.shieldTokens || 0,
+                },
+                activeRoundsCount,
+            },
+        });
+    } catch (error) {
+        console.error('Error fetching team stats:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching team statistics',
+            error: error.message,
+        });
+    }
+};
+
+// @desc    Get team recent activity
+// @route   GET /api/team/activity
+// @access  Private (Team)
+exports.getTeamActivity = async (req, res) => {
+    try {
+        const team = req.team;
+        const limit = parseInt(req.query.limit) || 10;
+
+        // For now, return mock activity since we don't have submissions model yet
+        // TODO: Replace with real submission data when submission system is implemented
+        const activities = [
+            {
+                type: 'submission',
+                action: 'Completed "Two Sum"',
+                points: '+100 points',
+                timestamp: new Date(Date.now() - 5 * 60 * 1000), // 5 mins ago
+                status: 'success',
+            },
+            {
+                type: 'submission',
+                action: 'Attempted "Binary Tree"',
+                points: 'No points',
+                timestamp: new Date(Date.now() - 15 * 60 * 1000), // 15 mins ago
+                status: 'neutral',
+            },
+            {
+                type: 'purchase',
+                action: 'Purchased Shield Token',
+                points: '-200 points',
+                timestamp: new Date(Date.now() - 30 * 60 * 1000), // 30 mins ago
+                status: 'purchase',
+            },
+        ];
+
+        res.status(200).json({
+            success: true,
+            count: activities.length,
+            data: activities,
+        });
+    } catch (error) {
+        console.error('Error fetching team activity:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching team activity',
+            error: error.message,
+        });
+    }
+};
+
+// @desc    Get leaderboard (all teams ranked by points)
+// @route   GET /api/team/leaderboard
+// @access  Private (Team)
+exports.getLeaderboard = async (req, res) => {
+    try {
+        // Get all approved teams sorted by points (descending)
+        const teams = await Team.find({ status: 'approved' })
+            .sort({ points: -1 })
+            .select('teamName points members sabotageTokens shieldTokens');
+
+        // Format leaderboard data with ranks
+        const leaderboard = teams.map((team, index) => ({
+            rank: index + 1,
+            teamName: team.teamName,
+            points: team.points || 0,
+            memberCount: team.members.length,
+            tokens: {
+                sabotage: team.sabotageTokens || 0,
+                shield: team.shieldTokens || 0,
+            },
+        }));
+
+        res.status(200).json({
+            success: true,
+            count: leaderboard.length,
+            data: leaderboard,
+        });
+    } catch (error) {
+        console.error('Error fetching leaderboard:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching leaderboard',
+            error: error.message,
+        });
+    }
+};
