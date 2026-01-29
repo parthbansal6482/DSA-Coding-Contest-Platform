@@ -1,0 +1,136 @@
+const Team = require('../models/Team');
+const { generateToken } = require('../utils/jwt');
+
+// @desc    Register team
+// @route   POST /api/team/register
+// @access  Public
+exports.register = async (req, res) => {
+    try {
+        const { teamName, password, members } = req.body;
+
+        // Check if team already exists
+        const teamExists = await Team.findOne({ teamName });
+        if (teamExists) {
+            return res.status(400).json({
+                success: false,
+                message: 'Team with this name already exists',
+            });
+        }
+
+        // Validate member count
+        if (!members || members.length < 2 || members.length > 3) {
+            return res.status(400).json({
+                success: false,
+                message: 'Team must have 2 to 3 members',
+            });
+        }
+
+        // Create team
+        const team = await Team.create({
+            teamName,
+            password,
+            members,
+        });
+
+        res.status(201).json({
+            success: true,
+            message: 'Team registered successfully. Waiting for admin approval.',
+            team: {
+                id: team._id,
+                teamName: team.teamName,
+                members: team.members,
+                status: team.status,
+                registrationDate: team.registrationDate,
+            },
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message,
+        });
+    }
+};
+
+// @desc    Login team
+// @route   POST /api/team/login
+// @access  Public
+exports.login = async (req, res) => {
+    try {
+        const { teamName, password } = req.body;
+
+        // Check for team
+        const team = await Team.findOne({ teamName }).select('+password');
+        if (!team) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid credentials',
+            });
+        }
+
+        // Check if team is approved
+        if (team.status !== 'approved') {
+            return res.status(403).json({
+                success: false,
+                message: `Your team registration is ${team.status}. Please wait for admin approval.`,
+                status: team.status,
+            });
+        }
+
+        // Check password
+        const isMatch = await team.comparePassword(password);
+        if (!isMatch) {
+            return res.status(401).json({
+                success: false,
+                message: 'Invalid credentials',
+            });
+        }
+
+        // Generate token
+        const token = generateToken(team._id, 'team');
+
+        res.status(200).json({
+            success: true,
+            token,
+            team: {
+                id: team._id,
+                teamName: team.teamName,
+                members: team.members,
+                status: team.status,
+            },
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message,
+        });
+    }
+};
+
+// @desc    Get team profile
+// @route   GET /api/team/profile
+// @access  Private (Team)
+exports.getProfile = async (req, res) => {
+    try {
+        const team = req.team;
+
+        res.status(200).json({
+            success: true,
+            team: {
+                id: team._id,
+                teamName: team.teamName,
+                members: team.members,
+                status: team.status,
+                registrationDate: team.registrationDate,
+                createdAt: team.createdAt,
+            },
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message,
+        });
+    }
+};
