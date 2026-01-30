@@ -15,7 +15,7 @@ import { Leaderboard } from './team-dashboard/Leaderboard';
 import { ActiveRounds } from './team-dashboard/ActiveRounds';
 import { TokenShop } from './team-dashboard/TokenShop';
 import { SabotagePanel } from './team-dashboard/SabotagePanel';
-import { getTeamStats, TeamStats } from '../services/team.service';
+import { getTeamStats, TeamStats, purchaseToken, getLeaderboard, LeaderboardTeam, activateShield, launchSabotage } from '../services/team.service';
 
 type Section = 'home' | 'leaderboard' | 'rounds' | 'shop' | 'tactics';
 
@@ -26,13 +26,18 @@ interface TeamDashboardProps {
 export function TeamDashboard({ onEnterRound }: TeamDashboardProps) {
   const [activeSection, setActiveSection] = useState<Section>('home');
   const [teamData, setTeamData] = useState<TeamStats | null>(null);
+  const [leaderboardData, setLeaderboardData] = useState<LeaderboardTeam[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     fetchTeamData();
+    fetchLeaderboard();
     // Refresh team data every 30 seconds
-    const interval = setInterval(fetchTeamData, 30000);
+    const interval = setInterval(() => {
+      fetchTeamData();
+      fetchLeaderboard();
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -46,6 +51,15 @@ export function TeamDashboard({ onEnterRound }: TeamDashboardProps) {
       setError('Failed to load team data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchLeaderboard = async () => {
+    try {
+      const data = await getLeaderboard();
+      setLeaderboardData(data);
+    } catch (err: any) {
+      console.error('Error fetching leaderboard:', err);
     }
   };
 
@@ -141,8 +155,8 @@ export function TeamDashboard({ onEnterRound }: TeamDashboardProps) {
                 key={item.id}
                 onClick={() => setActiveSection(item.id)}
                 className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-all ${activeSection === item.id
-                    ? 'border-white text-white'
-                    : 'border-transparent text-gray-400 hover:text-white'
+                  ? 'border-white text-white'
+                  : 'border-transparent text-gray-400 hover:text-white'
                   }`}
               >
                 <Icon className="w-4 h-4" />
@@ -162,19 +176,46 @@ export function TeamDashboard({ onEnterRound }: TeamDashboardProps) {
           <TokenShop
             currentPoints={teamData.points}
             currentTokens={teamData.tokens}
-            onPurchase={(type, cost) => {
-              setTeamData({
-                ...teamData,
-                points: teamData.points - cost,
-                tokens: {
-                  ...teamData.tokens,
-                  [type]: teamData.tokens[type as keyof typeof teamData.tokens] + 1,
-                },
-              });
+            onPurchase={async (type, cost) => {
+              try {
+                const updatedStats = await purchaseToken(type as 'sabotage' | 'shield', cost);
+                setTeamData({
+                  ...teamData,
+                  points: updatedStats.points,
+                  rank: updatedStats.rank,
+                  tokens: updatedStats.tokens,
+                });
+              } catch (err: any) {
+                console.error('Error purchasing token:', err);
+                alert(err.response?.data?.message || 'Failed to purchase token');
+              }
             }}
           />
         )}
-        {activeSection === 'tactics' && <SabotagePanel />}
+        {activeSection === 'tactics' && (
+          <SabotagePanel
+            currentTokens={teamData.tokens}
+            leaderboardTeams={leaderboardData}
+            onActivateShield={async () => {
+              try {
+                await activateShield();
+                await fetchTeamData();
+              } catch (err: any) {
+                console.error('Error activating shield:', err);
+                alert(err.response?.data?.message || 'Failed to activate shield');
+              }
+            }}
+            onLaunchSabotage={async (targetTeamId: string, sabotageType: string) => {
+              try {
+                await launchSabotage(targetTeamId, sabotageType);
+                await fetchTeamData();
+              } catch (err: any) {
+                console.error('Error launching sabotage:', err);
+                alert(err.response?.data?.message || 'Failed to launch sabotage');
+              }
+            }}
+          />
+        )}
       </main>
     </div>
   );

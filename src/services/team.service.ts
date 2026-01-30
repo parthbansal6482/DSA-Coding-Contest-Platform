@@ -98,6 +98,30 @@ export const getLeaderboard = async (): Promise<LeaderboardTeam[]> => {
     return response.data.data;
 };
 
+/**
+ * Purchase a token (sabotage or shield)
+ */
+export const purchaseToken = async (tokenType: 'sabotage' | 'shield', cost: number): Promise<TeamStats> => {
+    const response = await api.post('/team/purchase-token', { tokenType, cost });
+    return response.data.data;
+};
+
+/**
+ * Activate shield protection
+ */
+export const activateShield = async () => {
+    const response = await api.post('/team/activate-shield');
+    return response.data;
+};
+
+/**
+ * Launch sabotage attack on target team
+ */
+export const launchSabotage = async (targetTeamId: string, sabotageType: string) => {
+    const response = await api.post('/team/launch-sabotage', { targetTeamId, sabotageType });
+    return response.data;
+};
+
 // ============================================
 // Admin Team Management Functions
 // ============================================

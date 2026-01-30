@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Play, Send, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { useTypingDelay, useFormatChaos } from './SabotageEffects';
+import { MonacoCodeEditor } from './MonacoCodeEditor';
+import { submitSolution } from '../../services/round.service';
 
 interface Question {
   id: string;
@@ -18,6 +20,7 @@ interface SabotageEffect {
 }
 
 interface CodeEditorProps {
+  roundId: string;
   question: Question;
   activeEffects: SabotageEffect[];
   isShieldActive: boolean;
@@ -187,13 +190,14 @@ public class Solution {
   },
 };
 
-export function CodeEditor({ question, activeEffects, isShieldActive, onStatusChange }: CodeEditorProps) {
+export function CodeEditor({ roundId, question, activeEffects, isShieldActive, onStatusChange }: CodeEditorProps) {
   const [language, setLanguage] = useState<Language>('python');
   const [code, setCode] = useState(boilerplateCode[question.id]?.[language] || '');
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [testResults, setTestResults] = useState<TestResult[] | null>(null);
   const [showResults, setShowResults] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
 
   const handleLanguageChange = (newLanguage: Language) => {
     setLanguage(newLanguage);
@@ -205,10 +209,10 @@ export function CodeEditor({ question, activeEffects, isShieldActive, onStatusCh
   const handleRun = async () => {
     setIsRunning(true);
     setShowResults(false);
-    
+
     // Simulate running code
     await new Promise((resolve) => setTimeout(resolve, 1500));
-    
+
     // Mock test results for sample test cases
     const mockResults: TestResult[] = [
       {
@@ -218,7 +222,7 @@ export function CodeEditor({ question, activeEffects, isShieldActive, onStatusCh
         actualOutput: '0 1',
       },
     ];
-    
+
     setTestResults(mockResults);
     setShowResults(true);
     setIsRunning(false);
@@ -227,42 +231,56 @@ export function CodeEditor({ question, activeEffects, isShieldActive, onStatusCh
   const handleSubmit = async () => {
     setIsSubmitting(true);
     setShowResults(false);
-    
-    // Simulate submission and testing
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    
-    // Mock test results for all test cases
-    const allPassed = Math.random() > 0.3; // 70% chance of success
-    const mockResults: TestResult[] = [
-      {
-        passed: true,
-        input: '4 9\n2 7 11 15',
-        expectedOutput: '0 1',
-        actualOutput: '0 1',
-      },
-      {
-        passed: true,
-        input: '3 6\n3 2 4',
-        expectedOutput: '1 2',
-        actualOutput: '1 2',
-      },
-      {
-        passed: allPassed,
-        input: '2 6\n3 3',
-        expectedOutput: '0 1',
-        actualOutput: allPassed ? '0 1' : '1 0',
-      },
-    ];
-    
-    setTestResults(mockResults);
-    setShowResults(true);
-    setIsSubmitting(false);
-    
-    // Update question status
-    if (allPassed) {
-      onStatusChange('solved');
-    } else {
-      onStatusChange('attempted');
+    setSubmissionError(null);
+
+    try {
+      // Submit to real API
+      const response = await submitSolution(roundId, question.id, code, language);
+
+      // Map backend response to test results format
+      const result: TestResult = {
+        passed: response.data.status === 'accepted',
+        input: 'Hidden test cases',
+        expectedOutput: '',
+        actualOutput: response.data.status === 'accepted' ? 'Correct' : 'Incorrect',
+      };
+
+      const mockResults: TestResult[] = [
+        {
+          passed: response.data.testCasesPassed > 0,
+          input: 'Test case 1',
+          expectedOutput: 'Expected output',
+          actualOutput: response.data.testCasesPassed > 0 ? 'Correct' : 'Incorrect',
+        },
+        {
+          passed: response.data.testCasesPassed > 1,
+          input: 'Test case 2',
+          expectedOutput: 'Expected output',
+          actualOutput: response.data.testCasesPassed > 1 ? 'Correct' : 'Incorrect',
+        },
+        {
+          passed: response.data.testCasesPassed >= response.data.totalTestCases,
+          input: 'Test case 3',
+          expectedOutput: 'Expected output',
+          actualOutput: response.data.testCasesPassed >= response.data.totalTestCases ? 'Correct' : 'Incorrect',
+        },
+      ];
+
+      setTestResults(mockResults);
+      setShowResults(true);
+
+      // Update question status
+      if (response.data.status === 'accepted') {
+        onStatusChange('solved');
+      } else {
+        onStatusChange('attempted');
+      }
+    } catch (error: any) {
+      console.error('Submission error:', error);
+      setSubmissionError(error.response?.data?.message || 'Failed to submit solution');
+      setShowResults(true);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -330,110 +348,118 @@ export function CodeEditor({ question, activeEffects, isShieldActive, onStatusCh
       <div className="flex-1 flex overflow-hidden">
         {/* Code Editor */}
         <div className="flex-1 flex flex-col">
-          <textarea
+          <MonacoCodeEditor
+            language={language}
             value={code}
-            onChange={(e) => setCode(e.target.value)}
-            className="flex-1 bg-black text-gray-300 font-mono text-sm p-6 focus:outline-none resize-none"
-            style={{
-              tabSize: 4,
-              lineHeight: '1.6',
-            }}
-            spellCheck={false}
+            onChange={setCode}
+            readOnly={activeEffects.some((e) => e.type === 'blackout')}
+            typingDelay={activeEffects.find((e) => e.type === 'typing-delay') ? 300 : 0}
+            onRun={handleRun}
+            onSubmit={handleSubmit}
           />
         </div>
 
         {/* Results Panel */}
-        {showResults && testResults && (
+        {showResults && (
           <div className="w-96 border-l border-zinc-800 bg-zinc-900 overflow-y-auto">
             <div className="p-6 space-y-4">
-              {/* Overall Status */}
-              <div className={`p-4 rounded-lg border ${
-                allTestsPassed
-                  ? 'bg-green-500/10 border-green-500/30'
-                  : 'bg-red-500/10 border-red-500/30'
-              }`}>
-                <div className="flex items-center gap-3 mb-2">
-                  {allTestsPassed ? (
-                    <CheckCircle className="w-6 h-6 text-green-500" />
-                  ) : (
+              {/* Error Display */}
+              {submissionError && (
+                <div className="p-4 rounded-lg border bg-red-500/10 border-red-500/30">
+                  <div className="flex items-center gap-3 mb-2">
                     <XCircle className="w-6 h-6 text-red-500" />
-                  )}
-                  <h3 className={`text-lg font-bold ${
-                    allTestsPassed ? 'text-green-500' : 'text-red-500'
-                  }`}>
-                    {allTestsPassed ? 'All Tests Passed!' : 'Some Tests Failed'}
-                  </h3>
+                    <h3 className="text-lg font-bold text-red-500">Submission Failed</h3>
+                  </div>
+                  <p className="text-sm text-red-400">{submissionError}</p>
                 </div>
-                <p className={`text-sm ${
-                  allTestsPassed ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {passedCount} / {totalCount} test cases passed
-                </p>
-              </div>
+              )}
+
+              {/* Overall Status */}
+              {testResults && (
+                <div className={`p-4 rounded-lg border ${allTestsPassed
+                    ? 'bg-green-500/10 border-green-500/30'
+                    : 'bg-red-500/10 border-red-500/30'
+                  }`}>
+                  <div className="flex items-center gap-3 mb-2">
+                    {allTestsPassed ? (
+                      <CheckCircle className="w-6 h-6 text-green-500" />
+                    ) : (
+                      <XCircle className="w-6 h-6 text-red-500" />
+                    )}
+                    <h3 className={`text-lg font-bold ${allTestsPassed ? 'text-green-500' : 'text-red-500'
+                      }`}>
+                      {allTestsPassed ? 'All Tests Passed!' : 'Some Tests Failed'}
+                    </h3>
+                  </div>
+                  <p className={`text-sm ${allTestsPassed ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                    {passedCount} / {totalCount} test cases passed
+                  </p>
+                </div>
+              )}
 
               {/* Test Results */}
-              <div className="space-y-3">
-                <h4 className="text-white font-medium">Test Cases</h4>
-                {testResults.map((result, index) => (
-                  <div
-                    key={index}
-                    className={`p-4 rounded-lg border ${
-                      result.passed
+              {testResults && (
+                <div className="space-y-3">
+                  <h4 className="text-white font-medium">Test Cases</h4>
+                  {testResults.map((result: TestResult, index: number) => (
+                    <div
+                      key={index}
+                      className={`p-4 rounded-lg border ${result.passed
                         ? 'bg-green-500/5 border-green-500/20'
                         : 'bg-red-500/5 border-red-500/20'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 mb-2">
-                      {result.passed ? (
-                        <CheckCircle className="w-4 h-4 text-green-500" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-red-500" />
-                      )}
-                      <span className={`font-medium ${
-                        result.passed ? 'text-green-500' : 'text-red-500'
-                      }`}>
-                        Test Case {index + 1}
-                      </span>
-                    </div>
-
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <p className="text-gray-400 mb-1">Input:</p>
-                        <pre className="bg-black p-2 rounded text-gray-300 font-mono text-xs overflow-x-auto">
-                          {result.input}
-                        </pre>
-                      </div>
-
-                      <div>
-                        <p className="text-gray-400 mb-1">Expected:</p>
-                        <pre className="bg-black p-2 rounded text-gray-300 font-mono text-xs overflow-x-auto">
-                          {result.expectedOutput}
-                        </pre>
-                      </div>
-
-                      {result.actualOutput && (
-                        <div>
-                          <p className="text-gray-400 mb-1">Your Output:</p>
-                          <pre className={`bg-black p-2 rounded font-mono text-xs overflow-x-auto ${
-                            result.passed ? 'text-green-400' : 'text-red-400'
+                        }`}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        {result.passed ? (
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <XCircle className="w-4 h-4 text-red-500" />
+                        )}
+                        <span className={`font-medium ${result.passed ? 'text-green-500' : 'text-red-500'
                           }`}>
-                            {result.actualOutput}
-                          </pre>
-                        </div>
-                      )}
+                          Test Case {index + 1}
+                        </span>
+                      </div>
 
-                      {result.error && (
+                      <div className="space-y-2 text-sm">
                         <div>
-                          <p className="text-red-400 mb-1">Error:</p>
-                          <pre className="bg-black p-2 rounded text-red-400 font-mono text-xs overflow-x-auto">
-                            {result.error}
+                          <p className="text-gray-400 mb-1">Input:</p>
+                          <pre className="bg-black p-2 rounded text-gray-300 font-mono text-xs overflow-x-auto">
+                            {result.input}
                           </pre>
                         </div>
-                      )}
+
+                        <div>
+                          <p className="text-gray-400 mb-1">Expected:</p>
+                          <pre className="bg-black p-2 rounded text-gray-300 font-mono text-xs overflow-x-auto">
+                            {result.expectedOutput}
+                          </pre>
+                        </div>
+
+                        {result.actualOutput && (
+                          <div>
+                            <p className="text-gray-400 mb-1">Your Output:</p>
+                            <pre className={`bg-black p-2 rounded font-mono text-xs overflow-x-auto ${result.passed ? 'text-green-400' : 'text-red-400'
+                              }`}>
+                              {result.actualOutput}
+                            </pre>
+                          </div>
+                        )}
+
+                        {result.error && (
+                          <div>
+                            <p className="text-red-400 mb-1">Error:</p>
+                            <pre className="bg-black p-2 rounded text-red-400 font-mono text-xs overflow-x-auto">
+                              {result.error}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

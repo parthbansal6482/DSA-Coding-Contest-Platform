@@ -7,11 +7,36 @@ const {
     updateRound,
     deleteRound,
     updateRoundStatus,
+    getActiveRounds,
+    getRoundQuestions,
+    submitSolution,
+    getRoundSubmissions,
 } = require('../controllers/round.controller');
-const { protect, adminOnly } = require('../middleware/auth');
+const { protect, adminOnly, teamOnly } = require('../middleware/auth');
 const { validateRound } = require('../middleware/validation');
 
-// All routes require admin authentication
+// Team routes - must come before admin routes to avoid conflicts
+// @route   GET /api/rounds/active
+// @desc    Get active rounds for teams
+// @access  Private/Team
+router.get('/active', protect, teamOnly, getActiveRounds);
+
+// @route   GET /api/rounds/:id/questions
+// @desc    Get questions for a specific round
+// @access  Private/Team
+router.get('/:id/questions', protect, teamOnly, getRoundQuestions);
+
+// @route   POST /api/rounds/:id/submit
+// @desc    Submit solution for a question
+// @access  Private/Team
+router.post('/:id/submit', protect, teamOnly, submitSolution);
+
+// @route   GET /api/rounds/:id/submissions
+// @desc    Get team's submissions for a round
+// @access  Private/Team
+router.get('/:id/submissions', protect, teamOnly, getRoundSubmissions);
+
+// Admin routes - all routes below require admin authentication
 router.use(protect);
 router.use(adminOnly);
 
@@ -46,3 +71,4 @@ router.delete('/:id', deleteRound);
 router.patch('/:id/status', updateRoundStatus);
 
 module.exports = router;
+

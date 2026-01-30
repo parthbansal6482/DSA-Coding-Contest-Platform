@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { 
-  Zap, 
-  Shield as ShieldIcon, 
-  Target, 
-  Clock, 
+import {
+  Zap,
+  Shield as ShieldIcon,
+  Target,
+  Clock,
   AlertTriangle,
-  X 
+  X
 } from 'lucide-react';
 
 interface SabotageEffect {
@@ -24,9 +24,22 @@ interface TeamTarget {
   hasShield: boolean;
 }
 
-export function SabotagePanel() {
-  const [sabotageTokens, setSabotageTokens] = useState(2);
-  const [shieldTokens, setShieldTokens] = useState(1);
+interface SabotagePanelProps {
+  currentTokens: {
+    sabotage: number;
+    shield: number;
+  };
+  leaderboardTeams: Array<{
+    _id: string;
+    teamName: string;
+    rank: number;
+    shieldActive?: boolean;
+  }>;
+  onActivateShield: () => Promise<void>;
+  onLaunchSabotage: (targetTeamId: string, sabotageType: string) => Promise<void>;
+}
+
+export function SabotagePanel({ currentTokens, leaderboardTeams, onActivateShield, onLaunchSabotage }: SabotagePanelProps) {
   const [isShieldActive, setIsShieldActive] = useState(false);
   const [shieldEndTime, setShieldEndTime] = useState<number | null>(null);
   const [sabotageCooldown, setSabotageCooldown] = useState(0);
@@ -35,12 +48,13 @@ export function SabotagePanel() {
   const [selectedTarget, setSelectedTarget] = useState<TeamTarget | null>(null);
   const [activeEffects, setActiveEffects] = useState<SabotageEffect[]>([]);
 
-  const teams: TeamTarget[] = [
-    { id: '1', name: 'Algorithm Aces', rank: 1, hasShield: false },
-    { id: '2', name: 'Binary Beasts', rank: 2, hasShield: true },
-    { id: '4', name: 'Debug Squad', rank: 4, hasShield: false },
-    { id: '5', name: 'Runtime Rebels', rank: 5, hasShield: false },
-  ];
+  // Convert leaderboard teams to target format
+  const teams: TeamTarget[] = leaderboardTeams.map(team => ({
+    id: team._id,
+    name: team.teamName,
+    rank: team.rank,
+    hasShield: team.shieldActive || false,
+  }));
 
   const sabotageTypes: Omit<SabotageEffect, 'id' | 'active' | 'endTime'>[] = [
     {
@@ -84,16 +98,16 @@ export function SabotagePanel() {
     return () => clearInterval(interval);
   }, [sabotageCooldown, shieldCooldown, shieldEndTime]);
 
-  const handleActivateShield = () => {
-    if (shieldTokens > 0 && !isShieldActive && shieldCooldown === 0) {
-      setShieldTokens((prev) => prev - 1);
+  const handleActivateShield = async () => {
+    if (currentTokens.shield > 0 && !isShieldActive && shieldCooldown === 0) {
+      await onActivateShield();
       setIsShieldActive(true);
       setShieldEndTime(Date.now() + 600000); // 10 minutes
     }
   };
 
-  const handleSabotage = (effect: SabotageEffect['type']) => {
-    if (sabotageTokens > 0 && sabotageCooldown === 0 && selectedTarget) {
+  const handleSabotage = async (effect: SabotageEffect['type']) => {
+    if (currentTokens.sabotage > 0 && sabotageCooldown === 0 && selectedTarget) {
       if (selectedTarget.hasShield) {
         alert(`${selectedTarget.name} has a shield active! Your sabotage was blocked.`);
         return;
@@ -101,11 +115,10 @@ export function SabotagePanel() {
 
       const sabotageEffect = sabotageTypes.find((s) => s.type === effect);
       if (sabotageEffect) {
-        setSabotageTokens((prev) => prev - 1);
+        await onLaunchSabotage(selectedTarget.id, effect);
         setSabotageCooldown(300); // 5 minute cooldown
         setShowSabotageModal(false);
         setSelectedTarget(null);
-        alert(`Successfully sabotaged ${selectedTarget.name} with ${sabotageEffect.name}!`);
       }
     }
   };
@@ -153,11 +166,10 @@ export function SabotagePanel() {
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className={`p-3 rounded-xl border ${
-                isShieldActive 
-                  ? 'bg-blue-500/20 border-blue-500' 
+              <div className={`p-3 rounded-xl border ${isShieldActive
+                  ? 'bg-blue-500/20 border-blue-500'
                   : 'bg-blue-500/10 border-blue-500/30'
-              }`}>
+                }`}>
                 <ShieldIcon className="w-6 h-6 text-blue-500" />
               </div>
               <div>
@@ -168,7 +180,7 @@ export function SabotagePanel() {
               </div>
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-white">{shieldTokens}</p>
+              <p className="text-2xl font-bold text-white">{currentTokens.shield}</p>
               <p className="text-xs text-gray-400">Available</p>
             </div>
           </div>
@@ -203,12 +215,11 @@ export function SabotagePanel() {
 
           <button
             onClick={handleActivateShield}
-            disabled={shieldTokens === 0 || isShieldActive || shieldCooldown > 0}
-            className={`w-full py-3 rounded-lg font-medium transition-colors ${
-              shieldTokens > 0 && !isShieldActive && shieldCooldown === 0
+            disabled={currentTokens.shield === 0 || isShieldActive || shieldCooldown > 0}
+            className={`w-full py-3 rounded-lg font-medium transition-colors ${currentTokens.shield > 0 && !isShieldActive && shieldCooldown === 0
                 ? 'bg-blue-500 text-white hover:bg-blue-600'
                 : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
-            }`}
+              }`}
           >
             {isShieldActive ? 'Shield Active' : shieldCooldown > 0 ? 'On Cooldown' : 'Activate Shield'}
           </button>
@@ -229,7 +240,7 @@ export function SabotagePanel() {
               </div>
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-white">{sabotageTokens}</p>
+              <p className="text-2xl font-bold text-white">{currentTokens.sabotage}</p>
               <p className="text-xs text-gray-400">Available</p>
             </div>
           </div>
@@ -245,12 +256,11 @@ export function SabotagePanel() {
 
           <button
             onClick={() => setShowSabotageModal(true)}
-            disabled={sabotageTokens === 0 || sabotageCooldown > 0}
-            className={`w-full py-3 rounded-lg font-medium transition-colors ${
-              sabotageTokens > 0 && sabotageCooldown === 0
+            disabled={currentTokens.sabotage === 0 || sabotageCooldown > 0}
+            className={`w-full py-3 rounded-lg font-medium transition-colors ${currentTokens.sabotage > 0 && sabotageCooldown === 0
                 ? 'bg-red-500 text-white hover:bg-red-600'
                 : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
-            }`}
+              }`}
           >
             {sabotageCooldown > 0 ? 'On Cooldown' : 'Launch Sabotage'}
           </button>
@@ -320,11 +330,10 @@ export function SabotagePanel() {
                     <button
                       key={team.id}
                       onClick={() => setSelectedTarget(team)}
-                      className={`p-4 rounded-lg border transition-all text-left ${
-                        selectedTarget?.id === team.id
+                      className={`p-4 rounded-lg border transition-all text-left ${selectedTarget?.id === team.id
                           ? 'bg-red-500/10 border-red-500'
                           : 'bg-black border-zinc-800 hover:border-zinc-600'
-                      }`}
+                        }`}
                     >
                       <div className="flex items-start justify-between">
                         <div>

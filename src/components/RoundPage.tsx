@@ -1,17 +1,37 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, Clock, Zap, Shield as ShieldIcon } from 'lucide-react';
 import { QuestionList } from './round-page/QuestionList';
 import { ProblemView } from './round-page/ProblemView';
 import { TacticalPanel } from './round-page/TacticalPanel';
 import { SabotageEffects } from './round-page/SabotageEffects';
+import { getRoundQuestions } from '../services/round.service';
+import { getTeamStats } from '../services/team.service';
 
 interface Question {
-  id: string;
+  _id: string;
   title: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   points: number;
   status: 'unsolved' | 'attempted' | 'solved';
   category: string;
+  description?: string;
+  inputFormat?: string;
+  outputFormat?: string;
+  constraints?: string;
+  examples?: Array<{
+    input: string;
+    output: string;
+    explanation?: string;
+  }>;
+}
+
+interface Round {
+  _id: string;
+  name: string;
+  duration: number;
+  status: string;
+  startTime: string;
+  endTime: string;
 }
 
 interface SabotageEffect {
@@ -20,70 +40,116 @@ interface SabotageEffect {
   fromTeam?: string;
 }
 
-export function RoundPage() {
-  const [selectedQuestion, setSelectedQuestion] = useState<string | null>('1');
-  const [timeRemaining, setTimeRemaining] = useState(3245); // seconds
-  const [sabotageTokens, setSabotageTokens] = useState(2);
-  const [shieldTokens, setShieldTokens] = useState(1);
+interface RoundPageProps {
+  roundId: string;
+  onExitRound: () => void;
+}
+
+export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
+  const [round, setRound] = useState<Round | null>(null);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [selectedQuestion, setSelectedQuestion] = useState<string | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState(0);
+  const [sabotageTokens, setSabotageTokens] = useState(0);
+  const [shieldTokens, setShieldTokens] = useState(0);
   const [isShieldActive, setIsShieldActive] = useState(false);
   const [activeEffects, setActiveEffects] = useState<SabotageEffect[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [teamName, setTeamName] = useState('Your Team');
 
-  const questions: Question[] = [
-    {
-      id: '1',
-      title: 'Two Sum',
-      difficulty: 'Easy',
-      points: 100,
-      status: 'solved',
-      category: 'Arrays',
-    },
-    {
-      id: '2',
-      title: 'Valid Parentheses',
-      difficulty: 'Easy',
-      points: 100,
-      status: 'attempted',
-      category: 'Stack',
-    },
-    {
-      id: '3',
-      title: 'Binary Tree Traversal',
-      difficulty: 'Medium',
-      points: 150,
-      status: 'unsolved',
-      category: 'Trees',
-    },
-    {
-      id: '4',
-      title: 'Longest Common Subsequence',
-      difficulty: 'Medium',
-      points: 150,
-      status: 'unsolved',
-      category: 'Dynamic Programming',
-    },
-    {
-      id: '5',
-      title: 'Maximum Path Sum',
-      difficulty: 'Hard',
-      points: 200,
-      status: 'unsolved',
-      category: 'Trees',
-    },
-    {
-      id: '6',
-      title: 'Word Break II',
-      difficulty: 'Hard',
-      points: 200,
-      status: 'unsolved',
-      category: 'Dynamic Programming',
-    },
-  ];
+  // Fetch round data and team stats
+  useEffect(() => {
+    const fetchRoundData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch round questions
+        const roundResponse = await getRoundQuestions(roundId);
+        setRound(roundResponse.data.round);
+        console.log('Round data loaded:', roundResponse.data.round);
+        console.log('Round endTime:', roundResponse.data.round.endTime);
+        console.log('Current time:', new Date().toISOString());
+
+        // Map backend question structure to frontend
+        const mappedQuestions: Question[] = roundResponse.data.questions.map((q: any) => ({
+          _id: q._id,
+          title: q.title,
+          difficulty: q.difficulty,
+          points: q.difficulty === 'Easy' ? 100 : q.difficulty === 'Medium' ? 150 : 200,
+          status: q.submissionStatus || 'unsolved',
+          category: q.category,
+          description: q.description,
+          inputFormat: q.inputFormat,
+          outputFormat: q.outputFormat,
+          constraints: q.constraints,
+          examples: q.examples,
+        }));
+
+        setQuestions(mappedQuestions);
+        if (mappedQuestions.length > 0 && !selectedQuestion) {
+          setSelectedQuestion(mappedQuestions[0]._id);
+        }
+
+        // Fetch team stats for tokens
+        const teamStats = await getTeamStats();
+        setTeamName(teamStats.name || 'Your Team');
+        setSabotageTokens(teamStats.sabotageTokens || 0);
+        setShieldTokens(teamStats.shieldTokens || 0);
+      } catch (err: any) {
+        console.error('Error fetching round data:', err);
+        setError(err.response?.data?.message || 'Failed to load round data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRoundData();
+  }, [roundId]);
+
+  // Real-time timer countdown
+  useEffect(() => {
+    if (!round?.endTime) {
+      console.log('Timer not starting - no endTime:', round);
+      return;
+    }
+
+    const updateTimer = () => {
+      const now = Date.now();
+      const end = new Date(round.endTime).getTime();
+      const remaining = Math.max(0, Math.floor((end - now) / 1000));
+
+      console.log('Timer update:', {
+        now: new Date(now).toISOString(),
+        endTime: round.endTime,
+        end: new Date(end).toISOString(),
+        remaining,
+        remainingFormatted: formatTime(remaining)
+      });
+
+      setTimeRemaining(remaining);
+
+      if (remaining === 0) {
+        alert('Round has ended!');
+        onExitRound();
+      }
+    };
+
+    // Update immediately
+    updateTimer();
+
+    // Update every second
+    const interval = setInterval(updateTimer, 1000);
+
+    return () => clearInterval(interval);
+  }, [round?.endTime, onExitRound]);
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     if (hours > 0) {
       return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     }
@@ -94,9 +160,10 @@ export function RoundPage() {
     setSelectedQuestion(questionId);
   };
 
-  const handleBack = () => {
-    // Navigate back to team dashboard
-    console.log('Navigate back to dashboard');
+  const handleQuestionStatusChange = (questionId: string, status: Question['status']) => {
+    setQuestions((prev) =>
+      prev.map((q) => (q._id === questionId ? { ...q, status } : q))
+    );
   };
 
   const solvedCount = questions.filter((q) => q.status === 'solved').length;
@@ -108,6 +175,7 @@ export function RoundPage() {
     if (sabotageTokens > 0) {
       setSabotageTokens((prev) => prev - 1);
       alert(`Launched ${sabotageType} attack on ${targetTeam}!`);
+      // TODO: Implement real sabotage via WebSocket
     }
   };
 
@@ -119,6 +187,7 @@ export function RoundPage() {
       setTimeout(() => {
         setIsShieldActive(false);
       }, 600000);
+      // TODO: Implement real shield activation via API
     }
   };
 
@@ -139,6 +208,37 @@ export function RoundPage() {
     ]);
   };
 
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-gray-400">Loading round...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !round) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-500 mb-4">{error || 'Round not found'}</p>
+          <button
+            onClick={onExitRound}
+            className="bg-white text-black px-6 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const selectedQuestionData = questions.find((q) => q._id === selectedQuestion);
+
   return (
     <div className="min-h-screen bg-black flex flex-col">
       {/* Sabotage Effects Overlay */}
@@ -153,14 +253,14 @@ export function RoundPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
-              onClick={handleBack}
+              onClick={onExitRound}
               className="text-gray-400 hover:text-white transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="text-xl font-bold text-white">Semi Finals Round</h1>
-              <p className="text-sm text-gray-400">Code Warriors</p>
+              <h1 className="text-xl font-bold text-white">{round.name}</h1>
+              <p className="text-sm text-gray-400">{teamName}</p>
             </div>
           </div>
 
@@ -208,33 +308,29 @@ export function RoundPage() {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar - Question List */}
-        <aside className="w-80 bg-zinc-900 border-r border-zinc-800 overflow-y-auto">
-          <QuestionList
-            questions={questions}
-            selectedQuestionId={selectedQuestion}
-            onSelectQuestion={handleQuestionSelect}
-          />
-        </aside>
+        {/* Question List Sidebar */}
+        <QuestionList
+          questions={questions}
+          selectedQuestionId={selectedQuestion}
+          onSelectQuestion={handleQuestionSelect}
+        />
 
-        {/* Right Side - Problem View */}
-        <main className="flex-1 overflow-hidden">
-          {selectedQuestion ? (
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {selectedQuestionData ? (
             <ProblemView
-              question={questions.find((q) => q.id === selectedQuestion)!}
+              roundId={roundId}
+              question={selectedQuestionData}
               activeEffects={activeEffects}
               isShieldActive={isShieldActive}
-              onStatusChange={(status) => {
-                // Update question status
-                console.log('Status changed:', status);
-              }}
+              onStatusChange={(status) => handleQuestionStatusChange(selectedQuestionData._id, status)}
             />
           ) : (
-            <div className="h-full flex items-center justify-center text-gray-500">
-              <p>Select a question to start solving</p>
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-gray-400">Select a question to start coding</p>
             </div>
           )}
-        </main>
+        </div>
       </div>
 
       {/* Debug: Simulate attacks (remove in production) */}

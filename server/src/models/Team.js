@@ -62,6 +62,22 @@ const teamSchema = new mongoose.Schema(
             type: Number,
             default: 0,
         },
+        shieldActive: {
+            type: Boolean,
+            default: false,
+        },
+        shieldExpiresAt: {
+            type: Date,
+            default: null,
+        },
+        shieldCooldownUntil: {
+            type: Date,
+            default: null,
+        },
+        sabotageCooldownUntil: {
+            type: Date,
+            default: null,
+        },
         registrationDate: {
             type: Date,
             default: Date.now,

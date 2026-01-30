@@ -263,3 +263,244 @@ exports.getLeaderboard = async (req, res) => {
         });
     }
 };
+
+// @desc    Purchase token (sabotage or shield)
+// @route   POST /api/team/purchase-token
+// @access  Private (Team)
+exports.purchaseToken = async (req, res) => {
+    try {
+        const { tokenType, cost } = req.body;
+        const teamId = req.team._id;
+
+        // Validate token type
+        if (!['sabotage', 'shield'].includes(tokenType)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid token type. Must be "sabotage" or "shield"',
+            });
+        }
+
+        // Validate cost
+        if (!cost || cost <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid cost amount',
+            });
+        }
+
+        // Get fresh team data
+        const team = await Team.findById(teamId);
+        if (!team) {
+            return res.status(404).json({
+                success: false,
+                message: 'Team not found',
+            });
+        }
+
+        // Check if team has enough points
+        if (team.points < cost) {
+            return res.status(400).json({
+                success: false,
+                message: `Insufficient points. You have ${team.points} points but need ${cost} points.`,
+                currentPoints: team.points,
+                requiredPoints: cost,
+            });
+        }
+
+        // Deduct points and add token
+        team.points -= cost;
+        if (tokenType === 'sabotage') {
+            team.sabotageTokens += 1;
+        } else {
+            team.shieldTokens += 1;
+        }
+
+        await team.save();
+
+        // Get updated rank
+        const allTeams = await Team.find({ status: 'approved' })
+            .sort({ points: -1 })
+            .select('_id points');
+        const rank = allTeams.findIndex(t => t._id.toString() === team._id.toString()) + 1;
+
+        res.status(200).json({
+            success: true,
+            message: `Successfully purchased ${tokenType} token`,
+            data: {
+                teamName: team.teamName,
+                points: team.points,
+                rank,
+                tokens: {
+                    sabotage: team.sabotageTokens || 0,
+                    shield: team.shieldTokens || 0,
+                },
+            },
+        });
+    } catch (error) {
+        console.error('Error purchasing token:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error processing token purchase',
+            error: error.message,
+        });
+    }
+};
+
+// @desc    Activate shield protection
+// @route   POST /api/team/activate-shield
+// @access  Private (Team)
+exports.activateShield = async (req, res) => {
+    try {
+        const teamId = req.team._id;
+
+        // Get fresh team data
+        const team = await Team.findById(teamId);
+        if (!team) {
+            return res.status(404).json({
+                success: false,
+                message: 'Team not found',
+            });
+        }
+
+        // Check if team has shield tokens
+        if (team.shieldTokens <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No shield tokens available',
+            });
+        }
+
+        // Check if shield is already active
+        if (team.shieldActive && team.shieldExpiresAt && new Date() < team.shieldExpiresAt) {
+            return res.status(400).json({
+                success: false,
+                message: 'Shield is already active',
+                expiresAt: team.shieldExpiresAt,
+            });
+        }
+
+        // Check cooldown
+        if (team.shieldCooldownUntil && new Date() < team.shieldCooldownUntil) {
+            return res.status(400).json({
+                success: false,
+                message: 'Shield is on cooldown',
+                cooldownUntil: team.shieldCooldownUntil,
+            });
+        }
+
+        // Activate shield
+        team.shieldTokens -= 1;
+        team.shieldActive = true;
+        team.shieldExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+        team.shieldCooldownUntil = null; // Clear cooldown
+
+        await team.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Shield activated successfully',
+            data: {
+                shieldActive: team.shieldActive,
+                shieldExpiresAt: team.shieldExpiresAt,
+                shieldTokens: team.shieldTokens,
+            },
+        });
+    } catch (error) {
+        console.error('Error activating shield:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error activating shield',
+            error: error.message,
+        });
+    }
+};
+
+// @desc    Launch sabotage attack on target team
+// @route   POST /api/team/launch-sabotage
+// @access  Private (Team)
+exports.launchSabotage = async (req, res) => {
+    try {
+        const { targetTeamId, sabotageType } = req.body;
+        const teamId = req.team._id;
+
+        // Validate sabotage type
+        const validTypes = ['blackout', 'typing-delay', 'format-chaos', 'ui-glitch'];
+        if (!validTypes.includes(sabotageType)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid sabotage type',
+            });
+        }
+
+        // Get attacker team
+        const team = await Team.findById(teamId);
+        if (!team) {
+            return res.status(404).json({
+                success: false,
+                message: 'Team not found',
+            });
+        }
+
+        // Check if team has sabotage tokens
+        if (team.sabotageTokens <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No sabotage tokens available',
+            });
+        }
+
+        // Check cooldown
+        if (team.sabotageCooldownUntil && new Date() < team.sabotageCooldownUntil) {
+            return res.status(400).json({
+                success: false,
+                message: 'Sabotage is on cooldown',
+                cooldownUntil: team.sabotageCooldownUntil,
+            });
+        }
+
+        // Get target team
+        const targetTeam = await Team.findById(targetTeamId);
+        if (!targetTeam) {
+            return res.status(404).json({
+                success: false,
+                message: 'Target team not found',
+            });
+        }
+
+        // Check if target has active shield
+        if (targetTeam.shieldActive && targetTeam.shieldExpiresAt && new Date() < targetTeam.shieldExpiresAt) {
+            return res.status(400).json({
+                success: false,
+                message: `${targetTeam.teamName} has an active shield! Your sabotage was blocked.`,
+                targetHasShield: true,
+            });
+        }
+
+        // Deduct token and set cooldown
+        team.sabotageTokens -= 1;
+        team.sabotageCooldownUntil = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+        await team.save();
+
+        // Note: Actual sabotage effects would be implemented via WebSocket
+        // For now, we just track the token usage and cooldown
+
+        res.status(200).json({
+            success: true,
+            message: `Successfully sabotaged ${targetTeam.teamName} with ${sabotageType}`,
+            data: {
+                targetTeam: targetTeam.teamName,
+                sabotageType,
+                sabotageTokens: team.sabotageTokens,
+                cooldownUntil: team.sabotageCooldownUntil,
+            },
+        });
+    } catch (error) {
+        console.error('Error launching sabotage:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error launching sabotage',
+            error: error.message,
+        });
+    }
+};

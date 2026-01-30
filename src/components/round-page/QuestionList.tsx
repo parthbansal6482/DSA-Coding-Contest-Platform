@@ -1,7 +1,7 @@
 import { CheckCircle, Circle, AlertCircle } from 'lucide-react';
 
 interface Question {
-  id: string;
+  _id: string;
   title: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   points: number;
@@ -56,13 +56,12 @@ export function QuestionList({ questions, selectedQuestionId, onSelectQuestion }
         <div className="p-2 space-y-1">
           {questions.map((question) => (
             <button
-              key={question.id}
-              onClick={() => onSelectQuestion(question.id)}
-              className={`w-full text-left p-4 rounded-lg transition-all ${
-                selectedQuestionId === question.id
+              key={question._id}
+              onClick={() => onSelectQuestion(question._id)}
+              className={`w-full text-left p-4 rounded-lg transition-all ${selectedQuestionId === question._id
                   ? 'bg-white/5 border border-zinc-700'
                   : 'border border-transparent hover:bg-zinc-800'
-              }`}
+                }`}
             >
               <div className="flex items-start gap-3">
                 <div className="pt-0.5">{getStatusIcon(question.status)}</div>

@@ -1,0 +1,117 @@
+import { useEffect, useRef } from 'react';
+import Editor, { OnMount } from '@monaco-editor/react';
+import * as monaco from 'monaco-editor';
+
+interface MonacoCodeEditorProps {
+    language: string;
+    value: string;
+    onChange: (value: string) => void;
+    readOnly?: boolean;
+    typingDelay?: number;
+    onRun?: () => void;
+    onSubmit?: () => void;
+}
+
+export function MonacoCodeEditor({
+    language,
+    value,
+    onChange,
+    readOnly = false,
+    typingDelay = 0,
+    onRun,
+    onSubmit,
+}: MonacoCodeEditorProps) {
+    const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+    const handleEditorDidMount: OnMount = (editor, monaco) => {
+        editorRef.current = editor;
+
+        // Add keyboard shortcuts
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+            onRun?.();
+        });
+
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.Enter, () => {
+            onSubmit?.();
+        });
+
+        // Focus editor
+        editor.focus();
+    };
+
+    const handleEditorChange = (value: string | undefined) => {
+        if (value === undefined) return;
+
+        // Apply typing delay if sabotage is active
+        if (typingDelay > 0) {
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+            }
+            typingTimeoutRef.current = setTimeout(() => {
+                onChange(value);
+            }, typingDelay);
+        } else {
+            onChange(value);
+        }
+    };
+
+    useEffect(() => {
+        return () => {
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    // Map language names to Monaco language IDs
+    const getMonacoLanguage = (lang: string): string => {
+        const languageMap: Record<string, string> = {
+            python: 'python',
+            c: 'c',
+            cpp: 'cpp',
+            java: 'java',
+            javascript: 'javascript',
+        };
+        return languageMap[lang] || 'plaintext';
+    };
+
+    return (
+        <Editor
+            height="100%"
+            language={getMonacoLanguage(language)}
+            value={value}
+            onChange={handleEditorChange}
+            onMount={handleEditorDidMount}
+            theme="vs-dark"
+            options={{
+                fontSize: 14,
+                fontFamily: "'JetBrains Mono', 'Fira Code', 'Consolas', monospace",
+                minimap: { enabled: true },
+                scrollBeyondLastLine: false,
+                lineNumbers: 'on',
+                renderWhitespace: 'selection',
+                tabSize: 4,
+                insertSpaces: true,
+                automaticLayout: true,
+                readOnly: readOnly,
+                cursorBlinking: 'smooth',
+                cursorSmoothCaretAnimation: 'on',
+                smoothScrolling: true,
+                formatOnPaste: true,
+                formatOnType: true,
+                suggestOnTriggerCharacters: true,
+                acceptSuggestionOnEnter: 'on',
+                quickSuggestions: true,
+                wordWrap: 'on',
+                bracketPairColorization: {
+                    enabled: true,
+                },
+                padding: {
+                    top: 16,
+                    bottom: 16,
+                },
+            }}
+        />
+    );
+}

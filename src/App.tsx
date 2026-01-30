@@ -12,7 +12,7 @@ export default function App() {
   const [userType, setUserType] = useState<UserType>('team');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [isTeamLoggedIn, setIsTeamLoggedIn] = useState(false);
-  const [inRound, setInRound] = useState(false);
+  const [activeRoundId, setActiveRoundId] = useState<string | null>(null);
 
   // Show admin dashboard if logged in as admin
   if (isAdminLoggedIn) {
@@ -20,13 +20,22 @@ export default function App() {
   }
 
   // Show round page if team entered a round
-  if (isTeamLoggedIn && inRound) {
-    return <RoundPage />;
+  if (isTeamLoggedIn && activeRoundId) {
+    return (
+      <RoundPage
+        roundId={activeRoundId}
+        onExitRound={() => setActiveRoundId(null)}
+      />
+    );
   }
 
   // Show team dashboard if logged in as team
   if (isTeamLoggedIn) {
-    return <TeamDashboard onEnterRound={() => setInRound(true)} />;
+    return (
+      <TeamDashboard
+        onEnterRound={(roundId: string) => setActiveRoundId(roundId)}
+      />
+    );
   }
 
   return (
@@ -36,11 +45,10 @@ export default function App() {
         <div className="flex gap-4 mb-8">
           <button
             onClick={() => setUserType('team')}
-            className={`flex-1 py-4 px-6 rounded-xl border transition-all ${
-              userType === 'team'
+            className={`flex-1 py-4 px-6 rounded-xl border transition-all ${userType === 'team'
                 ? 'bg-white text-black border-white'
                 : 'bg-zinc-900 text-gray-400 border-zinc-800 hover:border-zinc-600'
-            }`}
+              }`}
           >
             <div className="flex items-center justify-center gap-3">
               <Users className="w-5 h-5" />
@@ -49,11 +57,10 @@ export default function App() {
           </button>
           <button
             onClick={() => setUserType('admin')}
-            className={`flex-1 py-4 px-6 rounded-xl border transition-all ${
-              userType === 'admin'
+            className={`flex-1 py-4 px-6 rounded-xl border transition-all ${userType === 'admin'
                 ? 'bg-white text-black border-white'
                 : 'bg-zinc-900 text-gray-400 border-zinc-800 hover:border-zinc-600'
-            }`}
+              }`}
           >
             <div className="flex items-center justify-center gap-3">
               <Shield className="w-5 h-5" />

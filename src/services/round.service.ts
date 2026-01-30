@@ -85,3 +85,46 @@ export const updateRoundStatus = async (
     const response = await api.patch(`/rounds/${id}/status`, { status });
     return response.data.data;
 };
+
+// ===== Team-facing functions =====
+
+/**
+ * Get active rounds for teams
+ */
+export const getActiveRounds = async () => {
+    const response = await api.get('/rounds/active');
+    return response.data;
+};
+
+/**
+ * Get round questions for teams
+ */
+export const getRoundQuestions = async (roundId: string) => {
+    const response = await api.get(`/rounds/${roundId}/questions`);
+    return response.data;
+};
+
+/**
+ * Submit solution for a question
+ */
+export const submitSolution = async (
+    roundId: string,
+    questionId: string,
+    code: string,
+    language: string
+) => {
+    const response = await api.post(`/rounds/${roundId}/submit`, {
+        questionId,
+        code,
+        language,
+    });
+    return response.data;
+};
+
+/**
+ * Get team's submissions for a round
+ */
+export const getRoundSubmissions = async (roundId: string) => {
+    const response = await api.get(`/rounds/${roundId}/submissions`);
+    return response.data;
+};
