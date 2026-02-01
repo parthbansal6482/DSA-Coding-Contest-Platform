@@ -46,6 +46,25 @@ const submissionSchema = new mongoose.Schema({
     executionTime: {
         type: Number, // in milliseconds
     },
+    memoryUsed: {
+        type: Number, // in KB
+    },
+    output: {
+        type: String, // Program output
+    },
+    error: {
+        type: String, // Error messages
+    },
+    testResults: [{
+        testCase: Number,
+        passed: Boolean,
+        input: String,
+        expectedOutput: String,
+        actualOutput: String,
+        error: String,
+        executionTime: Number,
+        memoryUsed: Number,
+    }],
     submittedAt: {
         type: Date,
         default: Date.now,

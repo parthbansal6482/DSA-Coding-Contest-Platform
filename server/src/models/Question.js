@@ -62,6 +62,28 @@ const questionSchema = new mongoose.Schema({
         required: [true, 'Number of test cases is required'],
         min: [1, 'At least one test case is required'],
     },
+    boilerplateCode: {
+        python: {
+            type: String,
+            default: '# Write your solution here\n',
+        },
+        c: {
+            type: String,
+            default: '// Write your solution here\n',
+        },
+        cpp: {
+            type: String,
+            default: '// Write your solution here\n',
+        },
+        java: {
+            type: String,
+            default: '// Write your solution here\n',
+        },
+        javascript: {
+            type: String,
+            default: '// Write your solution here\n',
+        },
+    },
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Admin',

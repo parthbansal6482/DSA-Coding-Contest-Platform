@@ -1,16 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Play, Send, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { useTypingDelay, useFormatChaos } from './SabotageEffects';
 import { MonacoCodeEditor } from './MonacoCodeEditor';
-import { submitSolution } from '../../services/round.service';
+import { runCode, submitSolution } from '../../services/round.service';
 
 interface Question {
-  id: string;
+  _id: string;  // MongoDB ID
+  id: string;   // Keep for backward compatibility
   title: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   points: number;
   status: 'unsolved' | 'attempted' | 'solved';
   category: string;
+  boilerplateCode?: {
+    python?: string;
+    c?: string;
+    cpp?: string;
+    java?: string;
+    javascript?: string;
+  };
 }
 
 interface SabotageEffect {
@@ -37,248 +45,140 @@ interface TestResult {
   error?: string;
 }
 
-// Boilerplate code for each language
-const boilerplateCode: Record<string, Record<Language, string>> = {
-  '1': {
-    python: `def two_sum(nums, target):
-    # Write your code here
-    pass
-
-# Read input
-n, target = map(int, input().split())
-nums = list(map(int, input().split()))
-
-# Call function and print result
-result = two_sum(nums, target)
-print(result[0], result[1])`,
-    c: `#include <stdio.h>
-#include <stdlib.h>
-
-void two_sum(int* nums, int n, int target, int* result) {
-    // Write your code here
-}
-
-int main() {
-    int n, target;
-    scanf("%d %d", &n, &target);
-    
-    int* nums = (int*)malloc(n * sizeof(int));
-    for (int i = 0; i < n; i++) {
-        scanf("%d", &nums[i]);
-    }
-    
-    int result[2];
-    two_sum(nums, n, target, result);
-    printf("%d %d\\n", result[0], result[1]);
-    
-    free(nums);
-    return 0;
-}`,
-    cpp: `#include <iostream>
-#include <vector>
-using namespace std;
-
-vector<int> two_sum(vector<int>& nums, int target) {
-    // Write your code here
-    return {};
-}
-
-int main() {
-    int n, target;
-    cin >> n >> target;
-    
-    vector<int> nums(n);
-    for (int i = 0; i < n; i++) {
-        cin >> nums[i];
-    }
-    
-    vector<int> result = two_sum(nums, target);
-    cout << result[0] << " " << result[1] << endl;
-    
-    return 0;
-}`,
-    java: `import java.util.*;
-
-public class Solution {
-    public static int[] twoSum(int[] nums, int target) {
-        // Write your code here
-        return new int[2];
-    }
-    
-    public static void main(String[] args) {
-        Scanner sc = new Scanner(System.in);
-        int n = sc.nextInt();
-        int target = sc.nextInt();
-        
-        int[] nums = new int[n];
-        for (int i = 0; i < n; i++) {
-            nums[i] = sc.nextInt();
-        }
-        
-        int[] result = twoSum(nums, target);
-        System.out.println(result[0] + " " + result[1]);
-        
-        sc.close();
-    }
-}`,
-  },
-  '2': {
-    python: `def is_valid(s):
-    # Write your code here
-    pass
-
-# Read input
-s = input().strip()
-
-# Call function and print result
-result = is_valid(s)
-print("true" if result else "false")`,
-    c: `#include <stdio.h>
-#include <string.h>
-#include <stdbool.h>
-
-bool is_valid(char* s) {
-    // Write your code here
-    return false;
-}
-
-int main() {
-    char s[10001];
-    scanf("%s", s);
-    
-    bool result = is_valid(s);
-    printf("%s\\n", result ? "true" : "false");
-    
-    return 0;
-}`,
-    cpp: `#include <iostream>
-#include <string>
-using namespace std;
-
-bool is_valid(string s) {
-    // Write your code here
-    return false;
-}
-
-int main() {
-    string s;
-    cin >> s;
-    
-    bool result = is_valid(s);
-    cout << (result ? "true" : "false") << endl;
-    
-    return 0;
-}`,
-    java: `import java.util.*;
-
-public class Solution {
-    public static boolean isValid(String s) {
-        // Write your code here
-        return false;
-    }
-    
-    public static void main(String[] args) {
-        Scanner sc = new Scanner(System.in);
-        String s = sc.next();
-        
-        boolean result = isValid(s);
-        System.out.println(result ? "true" : "false");
-        
-        sc.close();
-    }
-}`,
-  },
+// Default fallback boilerplate
+const defaultBoilerplate: Record<Language, string> = {
+  python: '# Write your solution here\n',
+  c: '// Write your solution here\n',
+  cpp: '// Write your solution here\n',
+  java: '// Write your solution here\n',
 };
+
+// Storage key for code persistence
+const getStorageKey = (roundId: string, questionId: string, language: string) =>
+  `code_${roundId}_${questionId}_${language}`;
 
 export function CodeEditor({ roundId, question, activeEffects, isShieldActive, onStatusChange }: CodeEditorProps) {
   const [language, setLanguage] = useState<Language>('python');
-  const [code, setCode] = useState(boilerplateCode[question.id]?.[language] || '');
+
+  // Track previous question ID to detect changes
+  const prevQuestionIdRef = useRef(question._id);
+
+  // Get boilerplate code for current language
+  const getBoilerplate = (lang: Language): string => {
+    return question.boilerplateCode?.[lang] || defaultBoilerplate[lang];
+  };
+
+  // Get saved code from localStorage or use boilerplate
+  const getSavedCode = (questionId: string, lang: Language): string => {
+    const key = getStorageKey(roundId, questionId, lang);
+    const saved = localStorage.getItem(key);
+    if (saved !== null) {
+      return saved;
+    }
+    // Return boilerplate for the specific question
+    return question.boilerplateCode?.[lang] || defaultBoilerplate[lang];
+  };
+
+  const [code, setCode] = useState(() => getSavedCode(question._id, language));
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [testResults, setTestResults] = useState<TestResult[] | null>(null);
-  const [showResults, setShowResults] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+
+  // Handle question change - load saved code for new question
+  useEffect(() => {
+    if (prevQuestionIdRef.current !== question._id) {
+      // Question changed - load saved code for new question
+      const savedCode = getSavedCode(question._id, language);
+      setCode(savedCode);
+      setTestResults(null);
+      setSubmissionError(null);
+      prevQuestionIdRef.current = question._id;
+    }
+  }, [question._id, language]);
+
+  // Save code to localStorage when it changes (debounced to avoid saving during question switch)
+  useEffect(() => {
+    // Only save if we're on the current question (ref matches current)
+    if (prevQuestionIdRef.current === question._id) {
+      const key = getStorageKey(roundId, question._id, language);
+      localStorage.setItem(key, code);
+    }
+  }, [code, roundId, question._id, language]);
 
   const handleLanguageChange = (newLanguage: Language) => {
     setLanguage(newLanguage);
-    setCode(boilerplateCode[question.id]?.[newLanguage] || '');
+    setCode(getSavedCode(question._id, newLanguage));
     setTestResults(null);
-    setShowResults(false);
   };
 
   const handleRun = async () => {
     setIsRunning(true);
-    setShowResults(false);
+    setSubmissionError(null);
 
-    // Simulate running code
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    try {
+      // Call the run endpoint (sample tests only, no submission)
+      const response = await runCode(roundId, question._id, code, language);
 
-    // Mock test results for sample test cases
-    const mockResults: TestResult[] = [
-      {
-        passed: true,
-        input: '4 9\n2 7 11 15',
-        expectedOutput: '0 1',
-        actualOutput: '0 1',
-      },
-    ];
+      if (response.success) {
+        // Map results to TestResult format
+        const results: TestResult[] = response.data.results.map((result) => ({
+          passed: result.passed,
+          input: result.input,
+          expectedOutput: result.expectedOutput,
+          actualOutput: result.actualOutput,
+          error: result.error,
+          executionTime: result.executionTime,
+          memoryUsed: result.memoryUsed,
+        }));
 
-    setTestResults(mockResults);
-    setShowResults(true);
-    setIsRunning(false);
+        setTestResults(results);
+      } else {
+        setSubmissionError(response.message || 'Failed to run code');
+      }
+    } catch (error: any) {
+      console.error('Error running code:', error);
+      setSubmissionError(error.response?.data?.message || 'Failed to run code');
+    } finally {
+      setIsRunning(false);
+    }
   };
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
-    setShowResults(false);
     setSubmissionError(null);
+    setTestResults(null);
 
     try {
       // Submit to real API
-      const response = await submitSolution(roundId, question.id, code, language);
+      const response = await submitSolution(roundId, question._id, code, language);
 
-      // Map backend response to test results format
-      const result: TestResult = {
-        passed: response.data.status === 'accepted',
-        input: 'Hidden test cases',
-        expectedOutput: '',
-        actualOutput: response.data.status === 'accepted' ? 'Correct' : 'Incorrect',
-      };
+      if (response.success && response.data.results) {
+        // Map backend response to test results format
+        const results: TestResult[] = response.data.results.map((result: any) => ({
+          passed: result.passed,
+          input: result.input,
+          expectedOutput: result.expectedOutput,
+          actualOutput: result.actualOutput,
+          error: result.error,
+          executionTime: result.executionTime,
+          memoryUsed: result.memoryUsed,
+        }));
 
-      const mockResults: TestResult[] = [
-        {
-          passed: response.data.testCasesPassed > 0,
-          input: 'Test case 1',
-          expectedOutput: 'Expected output',
-          actualOutput: response.data.testCasesPassed > 0 ? 'Correct' : 'Incorrect',
-        },
-        {
-          passed: response.data.testCasesPassed > 1,
-          input: 'Test case 2',
-          expectedOutput: 'Expected output',
-          actualOutput: response.data.testCasesPassed > 1 ? 'Correct' : 'Incorrect',
-        },
-        {
-          passed: response.data.testCasesPassed >= response.data.totalTestCases,
-          input: 'Test case 3',
-          expectedOutput: 'Expected output',
-          actualOutput: response.data.testCasesPassed >= response.data.totalTestCases ? 'Correct' : 'Incorrect',
-        },
-      ];
+        setTestResults(results);
 
-      setTestResults(mockResults);
-      setShowResults(true);
-
-      // Update question status
-      if (response.data.status === 'accepted') {
-        onStatusChange('solved');
+        // Update question status
+        if (response.data.status === 'accepted') {
+          onStatusChange('solved');
+        } else {
+          onStatusChange('attempted');
+        }
       } else {
-        onStatusChange('attempted');
+        setSubmissionError(response.message || 'Failed to submit solution');
       }
     } catch (error: any) {
       console.error('Submission error:', error);
       setSubmissionError(error.response?.data?.message || 'Failed to submit solution');
-      setShowResults(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -359,110 +259,144 @@ export function CodeEditor({ roundId, question, activeEffects, isShieldActive, o
           />
         </div>
 
-        {/* Results Panel */}
-        {showResults && (
-          <div className="w-96 border-l border-zinc-800 bg-zinc-900 overflow-y-auto">
-            <div className="p-6 space-y-4">
-              {/* Error Display */}
-              {submissionError && (
-                <div className="p-4 rounded-lg border bg-red-500/10 border-red-500/30">
-                  <div className="flex items-center gap-3 mb-2">
+        {/* Results Panel - Always visible */}
+        <div className="w-96 border-l border-zinc-800 bg-zinc-900 overflow-y-auto">
+          <div className="p-6 space-y-4">
+            <h3 className="text-lg font-bold text-white">Execution Results</h3>
+
+            {/* Loading State - Running */}
+            {isRunning && (
+              <div className="p-4 rounded-lg border bg-blue-500/10 border-blue-500/30">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+                  <div>
+                    <h4 className="font-bold text-blue-500">Running Code...</h4>
+                    <p className="text-sm text-blue-400">Testing against sample test cases</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Loading State - Submitting */}
+            {isSubmitting && (
+              <div className="p-4 rounded-lg border bg-yellow-500/10 border-yellow-500/30">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="w-6 h-6 text-yellow-500 animate-spin" />
+                  <div>
+                    <h4 className="font-bold text-yellow-500">Submitting...</h4>
+                    <p className="text-sm text-yellow-400">Evaluating against all test cases</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Error Display */}
+            {submissionError && !isRunning && !isSubmitting && (
+              <div className="p-4 rounded-lg border bg-red-500/10 border-red-500/30">
+                <div className="flex items-center gap-3 mb-2">
+                  <XCircle className="w-6 h-6 text-red-500" />
+                  <h4 className="text-lg font-bold text-red-500">Error</h4>
+                </div>
+                <p className="text-sm text-red-400">{submissionError}</p>
+              </div>
+            )}
+
+            {/* Overall Status */}
+            {testResults && !isRunning && !isSubmitting && (
+              <div className={`p-4 rounded-lg border ${allTestsPassed
+                ? 'bg-green-500/10 border-green-500/30'
+                : 'bg-red-500/10 border-red-500/30'
+                }`}>
+                <div className="flex items-center gap-3 mb-2">
+                  {allTestsPassed ? (
+                    <CheckCircle className="w-6 h-6 text-green-500" />
+                  ) : (
                     <XCircle className="w-6 h-6 text-red-500" />
-                    <h3 className="text-lg font-bold text-red-500">Submission Failed</h3>
-                  </div>
-                  <p className="text-sm text-red-400">{submissionError}</p>
-                </div>
-              )}
-
-              {/* Overall Status */}
-              {testResults && (
-                <div className={`p-4 rounded-lg border ${allTestsPassed
-                    ? 'bg-green-500/10 border-green-500/30'
-                    : 'bg-red-500/10 border-red-500/30'
-                  }`}>
-                  <div className="flex items-center gap-3 mb-2">
-                    {allTestsPassed ? (
-                      <CheckCircle className="w-6 h-6 text-green-500" />
-                    ) : (
-                      <XCircle className="w-6 h-6 text-red-500" />
-                    )}
-                    <h3 className={`text-lg font-bold ${allTestsPassed ? 'text-green-500' : 'text-red-500'
-                      }`}>
-                      {allTestsPassed ? 'All Tests Passed!' : 'Some Tests Failed'}
-                    </h3>
-                  </div>
-                  <p className={`text-sm ${allTestsPassed ? 'text-green-400' : 'text-red-400'
+                  )}
+                  <h4 className={`text-lg font-bold ${allTestsPassed ? 'text-green-500' : 'text-red-500'
                     }`}>
-                    {passedCount} / {totalCount} test cases passed
-                  </p>
+                    {allTestsPassed ? 'All Tests Passed!' : 'Some Tests Failed'}
+                  </h4>
                 </div>
-              )}
+                <p className={`text-sm ${allTestsPassed ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                  {passedCount} / {totalCount} test cases passed
+                </p>
+              </div>
+            )}
 
-              {/* Test Results */}
-              {testResults && (
-                <div className="space-y-3">
-                  <h4 className="text-white font-medium">Test Cases</h4>
-                  {testResults.map((result: TestResult, index: number) => (
-                    <div
-                      key={index}
-                      className={`p-4 rounded-lg border ${result.passed
-                        ? 'bg-green-500/5 border-green-500/20'
-                        : 'bg-red-500/5 border-red-500/20'
-                        }`}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        {result.passed ? (
-                          <CheckCircle className="w-4 h-4 text-green-500" />
-                        ) : (
-                          <XCircle className="w-4 h-4 text-red-500" />
-                        )}
-                        <span className={`font-medium ${result.passed ? 'text-green-500' : 'text-red-500'
-                          }`}>
-                          Test Case {index + 1}
-                        </span>
-                      </div>
-
-                      <div className="space-y-2 text-sm">
-                        <div>
-                          <p className="text-gray-400 mb-1">Input:</p>
-                          <pre className="bg-black p-2 rounded text-gray-300 font-mono text-xs overflow-x-auto">
-                            {result.input}
-                          </pre>
-                        </div>
-
-                        <div>
-                          <p className="text-gray-400 mb-1">Expected:</p>
-                          <pre className="bg-black p-2 rounded text-gray-300 font-mono text-xs overflow-x-auto">
-                            {result.expectedOutput}
-                          </pre>
-                        </div>
-
-                        {result.actualOutput && (
-                          <div>
-                            <p className="text-gray-400 mb-1">Your Output:</p>
-                            <pre className={`bg-black p-2 rounded font-mono text-xs overflow-x-auto ${result.passed ? 'text-green-400' : 'text-red-400'
-                              }`}>
-                              {result.actualOutput}
-                            </pre>
-                          </div>
-                        )}
-
-                        {result.error && (
-                          <div>
-                            <p className="text-red-400 mb-1">Error:</p>
-                            <pre className="bg-black p-2 rounded text-red-400 font-mono text-xs overflow-x-auto">
-                              {result.error}
-                            </pre>
-                          </div>
-                        )}
-                      </div>
+            {/* Test Results */}
+            {testResults && !isRunning && !isSubmitting && (
+              <div className="space-y-3">
+                <h4 className="text-white font-medium">Test Cases</h4>
+                {testResults.map((result: TestResult, index: number) => (
+                  <div
+                    key={index}
+                    className={`p-4 rounded-lg border ${result.passed
+                      ? 'bg-green-500/5 border-green-500/20'
+                      : 'bg-red-500/5 border-red-500/20'
+                      }`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      {result.passed ? (
+                        <CheckCircle className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-red-500" />
+                      )}
+                      <span className={`font-medium ${result.passed ? 'text-green-500' : 'text-red-500'
+                        }`}>
+                        Test Case {index + 1}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+
+                    <div className="space-y-2 text-sm">
+                      <div>
+                        <p className="text-gray-400 mb-1">Input:</p>
+                        <pre className="bg-black p-2 rounded text-gray-300 font-mono text-xs overflow-x-auto">
+                          {result.input}
+                        </pre>
+                      </div>
+
+                      <div>
+                        <p className="text-gray-400 mb-1">Expected:</p>
+                        <pre className="bg-black p-2 rounded text-gray-300 font-mono text-xs overflow-x-auto">
+                          {result.expectedOutput}
+                        </pre>
+                      </div>
+
+                      {result.actualOutput && (
+                        <div>
+                          <p className="text-gray-400 mb-1">Your Output:</p>
+                          <pre className={`bg-black p-2 rounded font-mono text-xs overflow-x-auto ${result.passed ? 'text-green-400' : 'text-red-400'
+                            }`}>
+                            {result.actualOutput}
+                          </pre>
+                        </div>
+                      )}
+
+                      {result.error && (
+                        <div>
+                          <p className="text-red-400 mb-1">Error:</p>
+                          <pre className="bg-black p-2 rounded text-red-400 font-mono text-xs overflow-x-auto">
+                            {result.error}
+                          </pre>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!testResults && !submissionError && !isRunning && !isSubmitting && (
+              <div className="p-6 text-center text-gray-500">
+                <p className="mb-2">No results yet</p>
+                <p className="text-sm">Click "Run Code" to test with sample cases or "Submit" to submit your solution</p>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

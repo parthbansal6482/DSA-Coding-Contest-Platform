@@ -9,6 +9,7 @@ const {
     updateRoundStatus,
     getActiveRounds,
     getRoundQuestions,
+    runCode,
     submitSolution,
     getRoundSubmissions,
 } = require('../controllers/round.controller');
@@ -25,6 +26,11 @@ router.get('/active', protect, teamOnly, getActiveRounds);
 // @desc    Get questions for a specific round
 // @access  Private/Team
 router.get('/:id/questions', protect, teamOnly, getRoundQuestions);
+
+// @route   POST /api/rounds/:id/run
+// @desc    Run code against sample test cases (no submission)
+// @access  Private/Team
+router.post('/:id/run', protect, teamOnly, runCode);
 
 // @route   POST /api/rounds/:id/submit
 // @desc    Submit solution for a question

@@ -20,6 +20,13 @@ interface Question {
   constraints: string;
   examples: { input: string; output: string; explanation?: string }[];
   testCases: number;
+  boilerplateCode?: {
+    python?: string;
+    c?: string;
+    cpp?: string;
+    java?: string;
+    javascript?: string;
+  };
 }
 
 export function QuestionsSection() {
@@ -30,6 +37,7 @@ export function QuestionsSection() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [activeBoilerplateTab, setActiveBoilerplateTab] = useState('python');
   const [formData, setFormData] = useState<Partial<CreateQuestionData>>({
     title: '',
     difficulty: 'Easy',
@@ -40,6 +48,13 @@ export function QuestionsSection() {
     constraints: '',
     examples: [{ input: '', output: '', explanation: '' }],
     testCases: 5,
+    boilerplateCode: {
+      python: '# Write your solution here\n',
+      c: '// Write your solution here\n',
+      cpp: '// Write your solution here\n',
+      java: '// Write your solution here\n',
+      javascript: '// Write your solution here\n',
+    },
   });
 
   useEffect(() => {
@@ -79,6 +94,13 @@ export function QuestionsSection() {
         constraints: question.constraints,
         examples: question.examples,
         testCases: question.testCases,
+        boilerplateCode: question.boilerplateCode || {
+          python: '# Write your solution here\n',
+          c: '// Write your solution here\n',
+          cpp: '// Write your solution here\n',
+          java: '// Write your solution here\n',
+          javascript: '// Write your solution here\n',
+        },
       });
     } else {
       setEditingQuestion(null);
@@ -92,8 +114,16 @@ export function QuestionsSection() {
         constraints: '',
         examples: [{ input: '', output: '', explanation: '' }],
         testCases: 5,
+        boilerplateCode: {
+          python: '# Write your solution here\n',
+          c: '// Write your solution here\n',
+          cpp: '// Write your solution here\n',
+          java: '// Write your solution here\n',
+          javascript: '// Write your solution here\n',
+        },
       });
     }
+    setActiveBoilerplateTab('python');
     setIsModalOpen(true);
   };
 
@@ -402,6 +432,44 @@ export function QuestionsSection() {
                   >
                     + Add Example
                   </button>
+                </div>
+
+                {/* Boilerplate Code Section */}
+                <div className="col-span-2">
+                  <label className="block text-sm text-gray-300 mb-2">Boilerplate Code (Starter Code)</label>
+                  <div className="bg-black border border-zinc-800 rounded-lg overflow-hidden">
+                    {/* Language Tabs */}
+                    <div className="flex border-b border-zinc-800">
+                      {['python', 'c', 'cpp', 'java', 'javascript'].map((lang) => (
+                        <button
+                          key={lang}
+                          type="button"
+                          onClick={() => setActiveBoilerplateTab(lang)}
+                          className={`px-4 py-2 text-sm font-medium transition-colors ${activeBoilerplateTab === lang
+                              ? 'bg-zinc-900 text-white border-b-2 border-white'
+                              : 'text-gray-400 hover:text-white'
+                            }`}
+                        >
+                          {lang === 'cpp' ? 'C++' : lang.charAt(0).toUpperCase() + lang.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Code Editor */}
+                    <textarea
+                      value={formData.boilerplateCode?.[activeBoilerplateTab as keyof typeof formData.boilerplateCode] || ''}
+                      onChange={(e) => setFormData({
+                        ...formData,
+                        boilerplateCode: {
+                          ...formData.boilerplateCode,
+                          [activeBoilerplateTab]: e.target.value
+                        }
+                      })}
+                      className="w-full bg-zinc-900 p-3 text-white font-mono text-sm focus:outline-none"
+                      rows={10}
+                      placeholder={`Enter ${activeBoilerplateTab} starter code...`}
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">This code will be pre-loaded for teams when they open the question</p>
                 </div>
               </div>
 

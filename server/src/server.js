@@ -13,6 +13,7 @@ const teamManagementRoutes = require('./routes/teamManagement.routes');
 const statsRoutes = require('./routes/stats.routes');
 const questionRoutes = require('./routes/question.routes');
 const roundRoutes = require('./routes/round.routes');
+const submissionRoutes = require('./routes/submission.routes');
 
 // Initialize express app
 const app = express();
@@ -65,6 +66,7 @@ app.use('/api/teams', teamManagementRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api/questions', questionRoutes);
 app.use('/api/rounds', roundRoutes);
+app.use('/api/submissions', submissionRoutes);
 
 // Health check route
 app.get('/api/health', (req, res) => {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AdminAuth } from './components/AdminAuth';
 import { TeamAuth } from './components/TeamAuth';
 import { AdminDashboard } from './components/AdminDashboard';
@@ -13,6 +13,22 @@ export default function App() {
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [isTeamLoggedIn, setIsTeamLoggedIn] = useState(false);
   const [activeRoundId, setActiveRoundId] = useState<string | null>(null);
+
+  // Check for existing login on mount
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const storedUserType = localStorage.getItem('userType');
+
+    if (token && storedUserType) {
+      if (storedUserType === 'admin') {
+        setIsAdminLoggedIn(true);
+        setUserType('admin');
+      } else if (storedUserType === 'team') {
+        setIsTeamLoggedIn(true);
+        setUserType('team');
+      }
+    }
+  }, []);
 
   // Show admin dashboard if logged in as admin
   if (isAdminLoggedIn) {
@@ -46,8 +62,8 @@ export default function App() {
           <button
             onClick={() => setUserType('team')}
             className={`flex-1 py-4 px-6 rounded-xl border transition-all ${userType === 'team'
-                ? 'bg-white text-black border-white'
-                : 'bg-zinc-900 text-gray-400 border-zinc-800 hover:border-zinc-600'
+              ? 'bg-white text-black border-white'
+              : 'bg-zinc-900 text-gray-400 border-zinc-800 hover:border-zinc-600'
               }`}
           >
             <div className="flex items-center justify-center gap-3">
@@ -58,8 +74,8 @@ export default function App() {
           <button
             onClick={() => setUserType('admin')}
             className={`flex-1 py-4 px-6 rounded-xl border transition-all ${userType === 'admin'
-                ? 'bg-white text-black border-white'
-                : 'bg-zinc-900 text-gray-400 border-zinc-800 hover:border-zinc-600'
+              ? 'bg-white text-black border-white'
+              : 'bg-zinc-900 text-gray-400 border-zinc-800 hover:border-zinc-600'
               }`}
           >
             <div className="flex items-center justify-center gap-3">

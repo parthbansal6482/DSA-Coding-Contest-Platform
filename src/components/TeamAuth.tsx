@@ -8,7 +8,7 @@ interface Member {
 }
 
 export function TeamAuth({ onLogin }: { onLogin: () => void }) {
-  const [isLogin, setIsLogin] = useState(false); // Default to signup for teams
+  const [isLogin, setIsLogin] = useState(true); // Default to login for teams
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

@@ -128,3 +128,20 @@ export const getRoundSubmissions = async (roundId: string) => {
     const response = await api.get(`/rounds/${roundId}/submissions`);
     return response.data;
 };
+
+/**
+ * Run code against sample test cases (no submission)
+ */
+export const runCode = async (
+    roundId: string,
+    questionId: string,
+    code: string,
+    language: string
+) => {
+    const response = await api.post(`/rounds/${roundId}/run`, {
+        questionId,
+        code,
+        language,
+    });
+    return response.data;
+};

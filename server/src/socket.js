@@ -53,8 +53,87 @@ const broadcastLeaderboardUpdate = async () => {
     }
 };
 
+/**
+ * Broadcast team stats update to a specific team
+ * @param {string} teamId - The team ID to send updates to
+ */
+const broadcastTeamStatsUpdate = async (teamId) => {
+    if (!io) {
+        console.warn('Socket.IO not initialized');
+        return;
+    }
+
+    try {
+        const team = await Team.findById(teamId)
+            .select('teamName points sabotageTokens shieldTokens');
+
+        if (!team) {
+            console.warn(`Team not found: ${teamId}`);
+            return;
+        }
+
+        // Get team's rank
+        const allTeams = await Team.find({ status: 'approved' })
+            .sort({ points: -1 })
+            .select('_id');
+        const rank = allTeams.findIndex(t => t._id.toString() === teamId.toString()) + 1;
+
+        const statsUpdate = {
+            teamName: team.teamName,
+            points: team.points || 0,
+            rank: rank || 0,
+            tokens: {
+                sabotage: team.sabotageTokens || 0,
+                shield: team.shieldTokens || 0,
+            },
+        };
+
+        // Emit to all clients (they can filter by team name)
+        io.emit('team:stats-update', statsUpdate);
+        console.log(`Team stats update broadcasted for team: ${team.teamName}`);
+    } catch (error) {
+        console.error('Error broadcasting team stats update:', error);
+    }
+};
+
+/**
+ * Broadcast submission update to a specific team
+ * @param {string} teamId - The team ID
+ * @param {object} submission - The submission data
+ */
+const broadcastSubmissionUpdate = async (teamId, submission) => {
+    if (!io) {
+        console.warn('Socket.IO not initialized');
+        return;
+    }
+
+    try {
+        const team = await Team.findById(teamId).select('teamName');
+        if (!team) {
+            console.warn(`Team not found: ${teamId}`);
+            return;
+        }
+
+        const updateData = {
+            teamName: team.teamName,
+            questionId: submission.question,
+            status: submission.status,
+            points: submission.points || 0,
+            timestamp: submission.submittedAt,
+        };
+
+        // Emit to all clients (they can filter by team name)
+        io.emit('submission:update', updateData);
+        console.log(`Submission update broadcasted for team: ${team.teamName}, question: ${submission.question}`);
+    } catch (error) {
+        console.error('Error broadcasting submission update:', error);
+    }
+};
+
 module.exports = {
     initializeSocket,
     broadcastLeaderboardUpdate,
+    broadcastTeamStatsUpdate,
+    broadcastSubmissionUpdate,
     getLeaderboardData,
 };

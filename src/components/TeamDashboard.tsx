@@ -16,6 +16,7 @@ import { ActiveRounds } from './team-dashboard/ActiveRounds';
 import { TokenShop } from './team-dashboard/TokenShop';
 import { SabotagePanel } from './team-dashboard/SabotagePanel';
 import { getTeamStats, TeamStats, purchaseToken, getLeaderboard, LeaderboardTeam, activateShield, launchSabotage } from '../services/team.service';
+import { socketService } from '../services/socket.service';
 
 type Section = 'home' | 'leaderboard' | 'rounds' | 'shop' | 'tactics';
 
@@ -31,15 +32,32 @@ export function TeamDashboard({ onEnterRound }: TeamDashboardProps) {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    // Connect to WebSocket
+    socketService.connect();
+
+    // Initial fetch
     fetchTeamData();
     fetchLeaderboard();
-    // Refresh team data every 30 seconds
-    const interval = setInterval(() => {
-      fetchTeamData();
-      fetchLeaderboard();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
+
+    // Subscribe to real-time team stats updates
+    const unsubscribeStats = socketService.onTeamStatsUpdate((data) => {
+      // Only update if this is the current team
+      if (teamData && data.teamName === teamData.teamName) {
+        console.log('Real-time team stats update received for current team');
+        setTeamData((prev) => prev ? {
+          ...prev,
+          points: data.points,
+          rank: data.rank,
+          tokens: data.tokens,
+        } : null);
+      }
+    });
+
+    // Cleanup on unmount
+    return () => {
+      unsubscribeStats();
+    };
+  }, [teamData?.teamName]);
 
   const fetchTeamData = async () => {
     try {

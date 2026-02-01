@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { X, Zap, Shield as ShieldIcon, Target, AlertTriangle } from 'lucide-react';
+import { X, Zap, Shield as ShieldIcon, Target, AlertTriangle, Coins, ShoppingCart } from 'lucide-react';
 
 interface TacticalPanelProps {
   sabotageTokens: number;
   shieldTokens: number;
+  currentPoints: number;
   isShieldActive: boolean;
   onUseSabotage: (targetTeam: string, sabotageType: string) => void;
   onActivateShield: () => void;
+  onPurchaseToken: (type: 'sabotage' | 'shield', cost: number) => void;
 }
 
 interface TeamTarget {
@@ -19,9 +21,11 @@ interface TeamTarget {
 export function TacticalPanel({
   sabotageTokens,
   shieldTokens,
+  currentPoints,
   isShieldActive,
   onUseSabotage,
   onActivateShield,
+  onPurchaseToken,
 }: TacticalPanelProps) {
   const [showModal, setShowModal] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<TeamTarget | null>(null);
@@ -92,16 +96,75 @@ export function TacticalPanel({
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Token Shop Section */}
+              <div className="bg-black border border-zinc-800 rounded-xl p-6">
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                      <ShoppingCart className="w-6 h-6 text-yellow-500" />
+                    </div>
+                    <div>
+                      <h4 className="text-lg font-bold text-white">Token Shop</h4>
+                      <p className="text-sm text-gray-400">Purchase tactical tokens</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold text-yellow-500 flex items-center gap-1">
+                      <Coins className="w-5 h-5" />
+                      {currentPoints}
+                    </p>
+                    <p className="text-xs text-gray-400">Points</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Sabotage Token */}
+                  <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Zap className="w-5 h-5 text-red-500" />
+                      <span className="font-medium text-white">Sabotage Token</span>
+                    </div>
+                    <p className="text-sm text-gray-400 mb-3">Disrupt opponent teams</p>
+                    <button
+                      onClick={() => onPurchaseToken('sabotage', 50)}
+                      disabled={currentPoints < 50}
+                      className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${currentPoints >= 50
+                          ? 'bg-red-500 text-white hover:bg-red-600'
+                          : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
+                        }`}
+                    >
+                      Buy for 50 pts
+                    </button>
+                  </div>
+                  {/* Shield Token */}
+                  <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ShieldIcon className="w-5 h-5 text-blue-500" />
+                      <span className="font-medium text-white">Shield Token</span>
+                    </div>
+                    <p className="text-sm text-gray-400 mb-3">Block incoming attacks</p>
+                    <button
+                      onClick={() => onPurchaseToken('shield', 75)}
+                      disabled={currentPoints < 75}
+                      className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${currentPoints >= 75
+                          ? 'bg-blue-500 text-white hover:bg-blue-600'
+                          : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
+                        }`}
+                    >
+                      Buy for 75 pts
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* Shield Section */}
               <div className="bg-black border border-zinc-800 rounded-xl p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div
-                      className={`p-3 rounded-xl border ${
-                        isShieldActive
-                          ? 'bg-blue-500/20 border-blue-500'
-                          : 'bg-blue-500/10 border-blue-500/30'
-                      }`}
+                      className={`p-3 rounded-xl border ${isShieldActive
+                        ? 'bg-blue-500/20 border-blue-500'
+                        : 'bg-blue-500/10 border-blue-500/30'
+                        }`}
                     >
                       <ShieldIcon className="w-6 h-6 text-blue-500" />
                     </div>
@@ -120,11 +183,10 @@ export function TacticalPanel({
                 <button
                   onClick={onActivateShield}
                   disabled={shieldTokens === 0 || isShieldActive}
-                  className={`w-full py-3 rounded-lg font-medium transition-colors ${
-                    shieldTokens > 0 && !isShieldActive
-                      ? 'bg-blue-500 text-white hover:bg-blue-600'
-                      : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
-                  }`}
+                  className={`w-full py-3 rounded-lg font-medium transition-colors ${shieldTokens > 0 && !isShieldActive
+                    ? 'bg-blue-500 text-white hover:bg-blue-600'
+                    : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
+                    }`}
                 >
                   {isShieldActive ? 'Shield Active' : 'Activate Shield (10 min)'}
                 </button>
@@ -161,11 +223,10 @@ export function TacticalPanel({
                           <button
                             key={team.id}
                             onClick={() => setSelectedTarget(team)}
-                            className={`p-3 rounded-lg border transition-all text-left ${
-                              selectedTarget?.id === team.id
-                                ? 'bg-red-500/10 border-red-500'
-                                : 'bg-zinc-900 border-zinc-700 hover:border-zinc-600'
-                            }`}
+                            className={`p-3 rounded-lg border transition-all text-left ${selectedTarget?.id === team.id
+                              ? 'bg-red-500/10 border-red-500'
+                              : 'bg-zinc-900 border-zinc-700 hover:border-zinc-600'
+                              }`}
                           >
                             <div className="flex items-start justify-between">
                               <div>

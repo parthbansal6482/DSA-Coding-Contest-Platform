@@ -108,6 +108,14 @@ const getRoundQuestions = async (req, res) => {
             return questionObj;
         });
 
+        // Calculate endTime if not set (for backward compatibility)
+        let endTime = round.endTime;
+        if (!endTime && round.startTime && round.duration) {
+            const durationMs = round.duration * 60 * 1000; // duration is in minutes
+            endTime = new Date(new Date(round.startTime).getTime() + durationMs);
+            console.log('Calculated endTime:', endTime.toISOString());
+        }
+
         res.status(200).json({
             success: true,
             data: {
@@ -117,7 +125,7 @@ const getRoundQuestions = async (req, res) => {
                     duration: round.duration,
                     status: round.status,
                     startTime: round.startTime,
-                    endTime: round.endTime,
+                    endTime: endTime,
                 },
                 questions: questionsWithStatus,
             },
@@ -134,15 +142,17 @@ const getRoundQuestions = async (req, res) => {
 };
 
 /**
- * @desc    Submit solution for a question
- * @route   POST /api/rounds/:id/submit
+ * @desc    Run code against sample test cases (no submission)
+ * @route   POST /api/rounds/:id/run
  * @access  Private/Team
  */
-const submitSolution = async (req, res) => {
+const runCode = async (req, res) => {
     try {
+        const { id: roundId } = req.params;
         const { questionId, code, language } = req.body;
-        const roundId = req.params.id;
         const teamId = req.team._id;
+
+        console.log('Run code request:', { roundId, questionId, language });
 
         // Validate input
         if (!questionId || !code || !language) {
@@ -184,21 +194,146 @@ const submitSolution = async (req, res) => {
             });
         }
 
-        // For now, simulate test case execution
-        // In production, this would call a code execution service
-        const totalTestCases = question.testCases;
-        const testCasesPassed = Math.floor(Math.random() * (totalTestCases + 1)); // Simulate
-        const status = testCasesPassed === totalTestCases ? 'accepted' : 'wrong_answer';
+        // Run code against sample test cases (examples)
+        const { runTestCases } = require('../services/execution.service');
 
-        // Calculate points based on difficulty and test cases passed
-        const basePoints = {
-            'Easy': 100,
-            'Medium': 150,
-            'Hard': 200,
-        };
-        const points = status === 'accepted' ? basePoints[question.difficulty] : 0;
+        const testCases = question.examples.map(example => ({
+            input: example.input,
+            expectedOutput: example.output,
+        }));
 
-        // Create submission
+        const result = await runTestCases(code, language, testCases);
+
+        // Return results without creating submission
+        res.status(200).json({
+            success: true,
+            message: 'Code executed successfully',
+            data: {
+                totalTests: result.totalTests,
+                passedTests: result.passedTests,
+                failedTests: result.failedTests,
+                results: result.results,
+                allPassed: result.passedTests === result.totalTests,
+            },
+        });
+    } catch (error) {
+        console.error('Error running code:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error running code',
+            error: error.message,
+        });
+    }
+};
+
+/**
+ * @desc    Submit solution for a question
+ * @route   POST /api/rounds/:id/submit
+ * @access  Private/Team
+ */
+const submitSolution = async (req, res) => {
+    const { runTestCases } = require('../services/execution.service');
+
+    try {
+        console.log('=== SUBMISSION REQUEST ===');
+        console.log('Body:', JSON.stringify(req.body));
+        console.log('Round ID:', req.params.id);
+        console.log('Team ID:', req.team?._id);
+
+        const { questionId, code, language } = req.body;
+        const roundId = req.params.id;
+        const teamId = req.team._id;
+
+        console.log('Extracted values:');
+        console.log('- questionId:', questionId);
+        console.log('- language:', language);
+        console.log('- code length:', code?.length);
+
+        // Validate input
+        if (!questionId || !code || !language) {
+            console.log('Validation failed!');
+            console.log('Missing:', {
+                questionId: !questionId,
+                code: !code,
+                language: !language
+            });
+            return res.status(400).json({
+                success: false,
+                message: 'Question ID, code, and language are required',
+            });
+        }
+
+        // Check if round is active
+        const round = await Round.findById(roundId);
+        if (!round) {
+            return res.status(404).json({
+                success: false,
+                message: 'Round not found',
+            });
+        }
+
+        if (round.status !== 'active') {
+            return res.status(403).json({
+                success: false,
+                message: 'This round is not currently active',
+            });
+        }
+
+        // Check if question exists and belongs to this round
+        const question = await Question.findById(questionId);
+        if (!question) {
+            return res.status(404).json({
+                success: false,
+                message: 'Question not found',
+            });
+        }
+
+        if (!round.questions.includes(questionId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'This question does not belong to this round',
+            });
+        }
+
+        // Prepare test cases from examples
+        const testCases = question.examples.map(example => ({
+            input: example.input,
+            expectedOutput: example.output,
+        }));
+
+        // Run test cases synchronously
+        const result = await runTestCases(code, language, testCases);
+        console.log('Test results:', result);
+
+        // Determine status
+        let status = 'accepted';
+        if (result.passedTests === 0) {
+            status = 'wrong_answer';
+        } else if (result.passedTests < result.totalTests) {
+            status = 'wrong_answer';
+        }
+
+        // Check for errors
+        const hasErrors = result.results.some(r => r.error && r.error.includes('timeout'));
+        if (hasErrors) {
+            status = 'time_limit_exceeded';
+        }
+
+        const hasRuntimeErrors = result.results.some(r => r.error && !r.error.includes('timeout'));
+        if (hasRuntimeErrors && status !== 'time_limit_exceeded') {
+            status = 'runtime_error';
+        }
+
+        // Calculate points (proportional to passed tests)
+        const points = status === 'accepted'
+            ? question.points || 100
+            : Math.floor((result.passedTests / result.totalTests) * (question.points || 100));
+
+        // Get average execution time and max memory
+        const avgExecutionTime = result.results.reduce((sum, r) => sum + (r.executionTime || 0), 0) / result.results.length;
+        const maxMemory = Math.max(...result.results.map(r => r.memoryUsed || 0));
+
+        // Create submission with results
         const submission = await Submission.create({
             team: teamId,
             round: roundId,
@@ -206,17 +341,19 @@ const submitSolution = async (req, res) => {
             code,
             language,
             status,
-            testCasesPassed,
-            totalTestCases,
+            totalTestCases: result.totalTests,
+            testCasesPassed: result.passedTests,
             points,
+            executionTime: Math.round(avgExecutionTime),
+            memoryUsed: maxMemory,
+            testResults: result.results,
         });
 
         // If accepted, update team points
         if (status === 'accepted') {
-            // Check if this is the first accepted submission for this question in this round
+            // Check if this is the first accepted submission for this question
             const previousAccepted = await Submission.findOne({
                 team: teamId,
-                round: roundId,
                 question: questionId,
                 status: 'accepted',
                 _id: { $ne: submission._id },
@@ -224,20 +361,24 @@ const submitSolution = async (req, res) => {
 
             if (!previousAccepted) {
                 await Team.findByIdAndUpdate(teamId, {
-                    $inc: { points: points },
+                    $inc: { points },
                 });
             }
         }
 
         res.status(201).json({
             success: true,
-            message: status === 'accepted' ? 'Solution accepted!' : 'Solution incorrect',
+            message: status === 'accepted' ? 'All test cases passed!' : 'Submission evaluated',
             data: {
                 submissionId: submission._id,
                 status,
-                testCasesPassed,
-                totalTestCases,
-                points,
+                totalTestCases: result.totalTests,
+                testCasesPassed: result.passedTests,
+                points: status === 'accepted' ? points : 0,
+                executionTime: Math.round(avgExecutionTime),
+                memoryUsed: maxMemory,
+                results: result.results,
+                allPassed: result.passedTests === result.totalTests,
             },
         });
     } catch (error) {
@@ -249,6 +390,90 @@ const submitSolution = async (req, res) => {
         });
     }
 };
+
+/**
+ * Run code asynchronously and update submission
+ */
+async function runCodeAsync(submissionId, code, language, question, teamId) {
+    const { runTestCases } = require('../services/execution.service');
+
+    try {
+        // Prepare test cases from examples
+        const testCases = question.examples.map(example => ({
+            input: example.input,
+            expectedOutput: example.output,
+        }));
+
+        // Run test cases
+        const result = await runTestCases(code, language, testCases);
+        console.log(result);
+
+        // Determine status
+        let status = 'accepted';
+        if (result.passedTests === 0) {
+            status = 'wrong_answer';
+        } else if (result.passedTests < result.totalTests) {
+            status = 'wrong_answer';
+        }
+
+        // Check for errors
+        const hasErrors = result.results.some(r => r.error && r.error.includes('timeout'));
+        if (hasErrors) {
+            status = 'time_limit_exceeded';
+        }
+
+        const hasRuntimeErrors = result.results.some(r => r.error && !r.error.includes('timeout'));
+        if (hasRuntimeErrors && status !== 'time_limit_exceeded') {
+            status = 'runtime_error';
+        }
+
+        // Calculate points (proportional to passed tests)
+        const points = status === 'accepted'
+            ? question.points || 100
+            : Math.floor((result.passedTests / result.totalTests) * (question.points || 100));
+
+        // Get average execution time and max memory
+        const avgExecutionTime = result.results.reduce((sum, r) => sum + r.executionTime, 0) / result.results.length;
+        const maxMemory = Math.max(...result.results.map(r => r.memoryUsed));
+
+        // Update submission
+        await Submission.findByIdAndUpdate(submissionId, {
+            status,
+            testCasesPassed: result.passedTests,
+            points,
+            executionTime: Math.round(avgExecutionTime),
+            memoryUsed: maxMemory,
+            testResults: result.results,
+        });
+
+        // If accepted, update team points
+        if (status === 'accepted') {
+            const submission = await Submission.findById(submissionId);
+
+            // Check if this is the first accepted submission for this question
+            const previousAccepted = await Submission.findOne({
+                team: teamId,
+                question: submission.question,
+                status: 'accepted',
+                _id: { $ne: submissionId },
+            });
+
+            if (!previousAccepted) {
+                await Team.findByIdAndUpdate(teamId, {
+                    $inc: { points },
+                });
+            }
+        }
+    } catch (error) {
+        console.error('Code execution error:', error);
+
+        // Update submission with error
+        await Submission.findByIdAndUpdate(submissionId, {
+            status: 'runtime_error',
+            error: error.message,
+        });
+    }
+}
 
 /**
  * @desc    Get team's submissions for a round
@@ -586,6 +811,7 @@ module.exports = {
     updateRoundStatus,
     getActiveRounds,
     getRoundQuestions,
+    runCode,
     submitSolution,
     getRoundSubmissions,
 };

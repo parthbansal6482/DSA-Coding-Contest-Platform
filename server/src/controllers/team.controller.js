@@ -141,6 +141,15 @@ exports.getProfile = async (req, res) => {
 exports.getTeamStats = async (req, res) => {
     try {
         const team = req.team;
+
+        // Check if team exists (user is authenticated as a team)
+        if (!team) {
+            return res.status(401).json({
+                success: false,
+                message: 'Not authenticated as a team. Please log in as a team.',
+            });
+        }
+
         const Round = require('../models/Round');
 
         // Get all approved teams sorted by points to calculate rank
@@ -157,10 +166,13 @@ exports.getTeamStats = async (req, res) => {
         res.status(200).json({
             success: true,
             data: {
+                name: team.teamName,
                 teamName: team.teamName,
                 members: team.members,
                 points: team.points || 0,
                 rank: rank || 0,
+                sabotageTokens: team.sabotageTokens || 0,
+                shieldTokens: team.shieldTokens || 0,
                 tokens: {
                     sabotage: team.sabotageTokens || 0,
                     shield: team.shieldTokens || 0,

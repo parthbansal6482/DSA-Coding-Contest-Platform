@@ -5,7 +5,8 @@ import { ProblemView } from './round-page/ProblemView';
 import { TacticalPanel } from './round-page/TacticalPanel';
 import { SabotageEffects } from './round-page/SabotageEffects';
 import { getRoundQuestions } from '../services/round.service';
-import { getTeamStats } from '../services/team.service';
+import { getTeamStats, purchaseToken } from '../services/team.service';
+import { socketService } from '../services/socket.service';
 
 interface Question {
   _id: string;
@@ -23,6 +24,13 @@ interface Question {
     output: string;
     explanation?: string;
   }>;
+  boilerplateCode?: {
+    python?: string;
+    c?: string;
+    cpp?: string;
+    java?: string;
+    javascript?: string;
+  };
 }
 
 interface Round {
@@ -57,6 +65,7 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [teamName, setTeamName] = useState('Your Team');
+  const [teamPoints, setTeamPoints] = useState(0);
 
   // Fetch round data and team stats
   useEffect(() => {
@@ -85,6 +94,7 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
           outputFormat: q.outputFormat,
           constraints: q.constraints,
           examples: q.examples,
+          boilerplateCode: q.boilerplateCode,
         }));
 
         setQuestions(mappedQuestions);
@@ -94,9 +104,10 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
 
         // Fetch team stats for tokens
         const teamStats = await getTeamStats();
-        setTeamName(teamStats.name || 'Your Team');
-        setSabotageTokens(teamStats.sabotageTokens || 0);
-        setShieldTokens(teamStats.shieldTokens || 0);
+        setTeamName(teamStats.teamName || 'Your Team');
+        setTeamPoints(teamStats.points || 0);
+        setSabotageTokens(teamStats.tokens?.sabotage || 0);
+        setShieldTokens(teamStats.tokens?.shield || 0);
       } catch (err: any) {
         console.error('Error fetching round data:', err);
         setError(err.response?.data?.message || 'Failed to load round data');
@@ -107,6 +118,44 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
 
     fetchRoundData();
   }, [roundId]);
+
+  // WebSocket subscriptions (separate effect to avoid re-running when teamName changes)
+  useEffect(() => {
+    if (!teamName || teamName === 'Your Team') {
+      return; // Wait until we have the actual team name
+    }
+
+    // Connect to WebSocket
+    socketService.connect();
+
+    // Subscribe to team stats updates
+    const unsubscribeStats = socketService.onTeamStatsUpdate((data) => {
+      if (data.teamName === teamName) {
+        console.log('Real-time team stats update in RoundPage');
+        setSabotageTokens(data.tokens.sabotage);
+        setShieldTokens(data.tokens.shield);
+      }
+    });
+
+    // Subscribe to submission updates
+    const unsubscribeSubmission = socketService.onSubmissionUpdate((data) => {
+      if (data.teamName === teamName) {
+        console.log('Real-time submission update:', data.questionId, data.status);
+        // Update question status based on submission
+        setQuestions((prev) => prev.map((q) =>
+          q._id === data.questionId
+            ? { ...q, status: data.status === 'accepted' ? 'solved' : 'attempted' }
+            : q
+        ));
+      }
+    });
+
+    // Cleanup on unmount
+    return () => {
+      unsubscribeStats();
+      unsubscribeSubmission();
+    };
+  }, [teamName]);
 
   // Real-time timer countdown
   useEffect(() => {
@@ -298,9 +347,21 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
             <TacticalPanel
               sabotageTokens={sabotageTokens}
               shieldTokens={shieldTokens}
+              currentPoints={teamPoints}
               isShieldActive={isShieldActive}
               onUseSabotage={handleUseSabotage}
               onActivateShield={handleActivateShield}
+              onPurchaseToken={async (type, cost) => {
+                try {
+                  const updatedStats = await purchaseToken(type, cost);
+                  setTeamPoints(updatedStats.points);
+                  setSabotageTokens(updatedStats.tokens.sabotage);
+                  setShieldTokens(updatedStats.tokens.shield);
+                } catch (err: any) {
+                  console.error('Error purchasing token:', err);
+                  alert(err.response?.data?.message || 'Failed to purchase token');
+                }
+              }}
             />
           </div>
         </div>
@@ -308,14 +369,16 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Question List Sidebar */}
-        <QuestionList
-          questions={questions}
-          selectedQuestionId={selectedQuestion}
-          onSelectQuestion={handleQuestionSelect}
-        />
+        {/* Question List - Left Sidebar Panel */}
+        <div className="w-80 border-r border-zinc-800 flex-shrink-0 overflow-hidden">
+          <QuestionList
+            questions={questions}
+            selectedQuestionId={selectedQuestion}
+            onSelectQuestion={handleQuestionSelect}
+          />
+        </div>
 
-        {/* Main Content */}
+        {/* Main Content Area - Code Editor and Problem Description */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {selectedQuestionData ? (
             <ProblemView

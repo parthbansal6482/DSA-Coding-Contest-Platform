@@ -62,10 +62,22 @@ export function RoundsSection() {
 
   const fetchQuestions = async () => {
     try {
+      // Check if user is admin before fetching
+      const userType = localStorage.getItem('userType');
+      if (userType !== 'admin') {
+        console.warn('Not logged in as admin, skipping question fetch');
+        return;
+      }
+
       const data = await getAllQuestions();
       setAvailableQuestions(data.map(q => ({ _id: q._id, title: q.title })));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching questions:', err);
+      // Don't show error to user for questions fetch failure
+      // as it's not critical for viewing rounds
+      if (err.response?.status === 403) {
+        console.warn('Access denied: Admin authentication required');
+      }
     }
   };
 
