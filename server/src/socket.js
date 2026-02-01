@@ -130,10 +130,51 @@ const broadcastSubmissionUpdate = async (teamId, submission) => {
     }
 };
 
+/**
+ * Broadcast cheating violation to all connected admins
+ * @param {string} teamName - The name of the team that violated rules
+ * @param {string} roundName - The round name
+ * @param {string} violationType - The type of violation (e.g., 'tab-switch')
+ */
+const broadcastCheatingViolation = (teamName, roundName, violationType) => {
+    if (!io) return;
+    io.emit('cheating:alert', {
+        teamName,
+        roundName,
+        violationType,
+        timestamp: new Date(),
+    });
+    console.log(`Cheating alert broadcasted for team: ${teamName}`);
+};
+
+/**
+ * Broadcast disqualification status to a specific team
+ * @param {string} teamId - The team ID
+ * @param {boolean} isDisqualified - New disqualification status
+ * @param {string} roundId - The round ID
+ */
+const broadcastDisqualificationUpdate = async (teamId, isDisqualified, roundId) => {
+    if (!io) return;
+
+    try {
+        const team = await Team.findById(teamId).select('teamName');
+        if (!team) return;
+
+        io.emit('team:disqualification-update', {
+            teamName: team.teamName,
+            isDisqualified,
+            roundId,
+        });
+        console.log(`Disqualification update broadcasted for team: ${team.teamName}, status: ${isDisqualified}`);
+    } catch (error) {
+        console.error('Error broadcasting disqualification update:', error);
+    }
+};
+
 module.exports = {
     initializeSocket,
-    broadcastLeaderboardUpdate,
-    broadcastTeamStatsUpdate,
     broadcastSubmissionUpdate,
+    broadcastCheatingViolation,
+    broadcastDisqualificationUpdate,
     getLeaderboardData,
 };

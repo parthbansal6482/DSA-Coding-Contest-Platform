@@ -77,6 +77,14 @@ const getRoundQuestions = async (req, res) => {
             });
         }
 
+        // Check if team is disqualified from this round
+        if (req.team.disqualifiedRounds && req.team.disqualifiedRounds.includes(req.params.id)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Your team has been disqualified from this round',
+            });
+        }
+
         // Get team's submissions for this round
         const submissions = await Submission.find({
             team: req.team._id,
@@ -178,6 +186,14 @@ const runCode = async (req, res) => {
             });
         }
 
+        // Check if team is disqualified from this round
+        if (req.team.disqualifiedRounds && req.team.disqualifiedRounds.includes(roundId)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Your team has been disqualified from this round',
+            });
+        }
+
         // Check if question exists and belongs to this round
         const question = await Question.findById(questionId);
         if (!question) {
@@ -276,6 +292,14 @@ const submitSolution = async (req, res) => {
             return res.status(403).json({
                 success: false,
                 message: 'This round is not currently active',
+            });
+        }
+
+        // Check if team is disqualified from this round
+        if (req.team.disqualifiedRounds && req.team.disqualifiedRounds.includes(roundId)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Your team has been disqualified from this round',
             });
         }
 

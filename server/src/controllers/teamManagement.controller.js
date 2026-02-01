@@ -1,4 +1,5 @@
 const Team = require('../models/Team');
+const { broadcastDisqualificationUpdate } = require('../socket');
 
 // @desc    Get all teams (with optional status filter)
 // @route   GET /api/teams?status=pending
@@ -105,6 +106,57 @@ exports.rejectTeam = async (req, res) => {
                 members: team.members,
                 status: team.status,
             },
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server error',
+            error: error.message,
+        });
+    }
+};
+
+// @desc    Toggle team disqualification for a round
+// @route   PUT /api/teams/:teamId/toggle-disqualification
+// @access  Private (Admin)
+exports.toggleDisqualification = async (req, res) => {
+    try {
+        const { teamId } = req.params;
+        const { roundId } = req.body;
+
+        if (!roundId) {
+            return res.status(400).json({
+                success: false,
+                message: 'Round ID is required',
+            });
+        }
+
+        const team = await Team.findById(teamId);
+        if (!team) {
+            return res.status(404).json({
+                success: false,
+                message: 'Team not found',
+            });
+        }
+
+        const index = team.disqualifiedRounds.indexOf(roundId);
+        if (index > -1) {
+            // Remove from disqualified rounds
+            team.disqualifiedRounds.splice(index, 1);
+        } else {
+            // Add to disqualified rounds
+            team.disqualifiedRounds.push(roundId);
+        }
+
+        await team.save();
+
+        // Notify team via WebSocket
+        await broadcastDisqualificationUpdate(teamId, index === -1, roundId);
+
+        res.status(200).json({
+            success: true,
+            message: index > -1 ? 'Disqualification removed' : 'Team disqualified from round',
+            disqualified: index === -1,
         });
     } catch (error) {
         res.status(500).json({

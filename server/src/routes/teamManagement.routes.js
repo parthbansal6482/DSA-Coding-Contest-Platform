@@ -4,6 +4,7 @@ const {
     getAllTeams,
     approveTeam,
     rejectTeam,
+    toggleDisqualification,
 } = require('../controllers/teamManagement.controller');
 const { protect, adminOnly } = require('../middleware/auth');
 
@@ -13,5 +14,6 @@ router.use(protect, adminOnly);
 router.get('/', getAllTeams);
 router.put('/:teamId/approve', approveTeam);
 router.put('/:teamId/reject', rejectTeam);
+router.put('/:teamId/toggle-disqualification', toggleDisqualification);
 
 module.exports = router;

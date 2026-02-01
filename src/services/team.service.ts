@@ -26,6 +26,7 @@ export interface TeamStats {
         shield: number;
     };
     activeRoundsCount: number;
+    disqualifiedRounds?: string[];
 }
 
 export interface TeamActivity {
@@ -148,5 +149,13 @@ export const approveTeam = async (teamId: string) => {
  */
 export const rejectTeam = async (teamId: string) => {
     const response = await api.put(`/teams/${teamId}/reject`);
+    return response.data;
+};
+
+/**
+ * Toggle team disqualification for a round (Admin only)
+ */
+export const toggleDisqualification = async (teamId: string, roundId: string) => {
+    const response = await api.put(`/teams/${teamId}/toggle-disqualification`, { roundId });
     return response.data;
 };

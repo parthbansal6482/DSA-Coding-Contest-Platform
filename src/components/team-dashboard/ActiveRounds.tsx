@@ -14,9 +14,10 @@ interface Round {
 
 interface ActiveRoundsProps {
   onEnterRound?: (roundId: string) => void;
+  disqualifiedRounds?: string[];
 }
 
-export function ActiveRounds({ onEnterRound }: ActiveRoundsProps) {
+export function ActiveRounds({ onEnterRound, disqualifiedRounds = [] }: ActiveRoundsProps) {
   const [rounds, setRounds] = useState<Round[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -126,12 +127,34 @@ export function ActiveRounds({ onEnterRound }: ActiveRoundsProps) {
               </p>
             </div>
           </div>
-          <button
-            onClick={() => handleEnterRound(rounds.find((r) => r.status === 'active')!._id)}
-            className="bg-green-500 text-white px-6 py-2 rounded-lg font-medium hover:bg-green-600 transition-colors flex items-center gap-2">
-            <Play className="w-4 h-4" />
-            Enter Now
-          </button>
+          {(() => {
+            const activeRound = rounds.find((r) => r.status === 'active');
+            if (!activeRound) return null;
+            const isDisqualified = disqualifiedRounds.includes(activeRound._id);
+
+            return (
+              <button
+                disabled={isDisqualified}
+                onClick={() => handleEnterRound(activeRound._id)}
+                className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${isDisqualified
+                    ? 'bg-red-500/20 text-red-500 cursor-not-allowed border border-red-500/30'
+                    : 'bg-green-500 text-white hover:bg-green-600'
+                  }`}
+              >
+                {isDisqualified ? (
+                  <>
+                    <Lock className="w-4 h-4" />
+                    Disqualified
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4" />
+                    Enter Now
+                  </>
+                )}
+              </button>
+            );
+          })()}
         </div>
       )}
 
@@ -175,14 +198,31 @@ export function ActiveRounds({ onEnterRound }: ActiveRoundsProps) {
 
               {/* Action Button */}
               <div>
-                {round.status === 'active' && (
-                  <button
-                    onClick={() => handleEnterRound(round._id)}
-                    className="w-full bg-white text-black py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2">
-                    <Play className="w-5 h-5" />
-                    Enter Round
-                  </button>
-                )}
+                {round.status === 'active' && (() => {
+                  const isDisqualified = disqualifiedRounds.includes(round._id);
+                  return (
+                    <button
+                      disabled={isDisqualified}
+                      onClick={() => handleEnterRound(round._id)}
+                      className={`w-full py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${isDisqualified
+                          ? 'bg-red-500/10 text-red-500 cursor-not-allowed border border-red-500/20'
+                          : 'bg-white text-black hover:bg-gray-200'
+                        }`}
+                    >
+                      {isDisqualified ? (
+                        <>
+                          <Lock className="w-5 h-5" />
+                          Disqualified from this Round
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-5 h-5" />
+                          Enter Round
+                        </>
+                      )}
+                    </button>
+                  );
+                })()}
 
                 {round.status === 'upcoming' && (
                   <button

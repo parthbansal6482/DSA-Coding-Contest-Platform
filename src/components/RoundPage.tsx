@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Clock, Zap, Shield as ShieldIcon } from 'lucide-react';
+import { ArrowLeft, Clock, Zap, Shield as ShieldIcon, Maximize, AlertTriangle } from 'lucide-react';
 import { QuestionList } from './round-page/QuestionList';
 import { ProblemView } from './round-page/ProblemView';
 import { TacticalPanel } from './round-page/TacticalPanel';
 import { SabotageEffects } from './round-page/SabotageEffects';
 import { getRoundQuestions } from '../services/round.service';
-import { getTeamStats, purchaseToken } from '../services/team.service';
+import { getTeamStats, purchaseToken, getLeaderboard, LeaderboardTeam } from '../services/team.service';
 import { socketService } from '../services/socket.service';
 
 interface Question {
@@ -53,6 +53,13 @@ interface RoundPageProps {
   onExitRound: () => void;
 }
 
+interface TeamTarget {
+  id: string;
+  name: string;
+  rank: number;
+  hasShield: boolean;
+}
+
 export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
   const [round, setRound] = useState<Round | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -66,6 +73,10 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [teamName, setTeamName] = useState('Your Team');
   const [teamPoints, setTeamPoints] = useState(0);
+  const [allTeams, setAllTeams] = useState<TeamTarget[]>([]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isDisqualified, setIsDisqualified] = useState(false);
+  const [showExitWarning, setShowExitWarning] = useState(false);
 
   // Fetch round data and team stats
   useEffect(() => {
@@ -108,6 +119,21 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
         setTeamPoints(teamStats.points || 0);
         setSabotageTokens(teamStats.tokens?.sabotage || 0);
         setShieldTokens(teamStats.tokens?.shield || 0);
+
+        // Check if team is disqualified from this round
+        if (teamStats.disqualifiedRounds?.includes(roundId)) {
+          setIsDisqualified(true);
+        }
+
+        // Fetch all teams for tactical panel
+        const leaderboard = await getLeaderboard();
+        const mappedTeams: TeamTarget[] = leaderboard.map((t) => ({
+          id: t.teamName, // Using teamName as ID since backend uses names in many places
+          name: t.teamName,
+          rank: t.rank,
+          hasShield: false, // We don't have shield status in leaderboard yet
+        }));
+        setAllTeams(mappedTeams);
       } catch (err: any) {
         console.error('Error fetching round data:', err);
         setError(err.response?.data?.message || 'Failed to load round data');
@@ -150,10 +176,24 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
       }
     });
 
+    // Subscribe to disqualification updates
+    const unsubscribeDisqualification = socketService.onDisqualificationUpdate((data) => {
+      if (data.teamName === teamName && data.roundId === roundId) {
+        setIsDisqualified(data.isDisqualified);
+        if (data.isDisqualified) {
+          // Exit full screen if disqualified
+          if (document.fullscreenElement) {
+            document.exitFullscreen().catch(err => console.error(err));
+          }
+        }
+      }
+    });
+
     // Cleanup on unmount
     return () => {
       unsubscribeStats();
       unsubscribeSubmission();
+      unsubscribeDisqualification();
     };
   }, [teamName]);
 
@@ -194,6 +234,71 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
     return () => clearInterval(interval);
   }, [round?.endTime, onExitRound]);
 
+  // Handle browser back/refresh/close
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      const message = "Are you sure you want to leave the round? Your progress will be saved, but your current session state (like real-time ranking and points) will be refreshed when you re-enter.";
+      e.preventDefault();
+      e.returnValue = message;
+      return message;
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  // Full screen and Visibility detection
+  useEffect(() => {
+    if (loading || isDisqualified) return;
+
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && !isDisqualified) {
+        console.warn('Tab switch detected!');
+        socketService.reportViolation(teamName, round?.name || 'Unknown Round', 'tab-switch');
+      }
+    };
+
+    const handleWindowBlur = () => {
+      if (!isDisqualified) {
+        console.warn('Window blur detected!');
+        socketService.reportViolation(teamName, round?.name || 'Unknown Round', 'window-blur');
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+
+    // Initial check
+    setIsFullscreen(!!document.fullscreenElement);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }, [loading, isDisqualified, teamName, round?.name]);
+
+  const enterFullscreen = () => {
+    const element = document.documentElement;
+    if (element.requestFullscreen) {
+      element.requestFullscreen().catch(err => {
+        console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+      });
+    }
+  };
+
+  const handleExitRound = () => {
+    const confirmed = window.confirm("Are you sure you want to leave the round? Your progress will be saved, but your current session state (like real-time ranking and points) will be refreshed when you re-enter.");
+    if (confirmed) {
+      onExitRound();
+    }
+  };
+
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -232,10 +337,10 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
     if (shieldTokens > 0 && !isShieldActive) {
       setShieldTokens((prev) => prev - 1);
       setIsShieldActive(true);
-      // Shield lasts 10 minutes
+      // Shield lasts 1 minute
       setTimeout(() => {
         setIsShieldActive(false);
-      }, 600000);
+      }, 60000);
       // TODO: Implement real shield activation via API
     }
   };
@@ -250,7 +355,8 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
       alert('Your shield blocked the attack!');
       return;
     }
-    const duration = type === 'typing-delay' ? 60000 : type === 'format-chaos' ? 45000 : 30000;
+    // Sabotage lasts 3 minutes
+    const duration = 180000;
     setActiveEffects((prev) => [
       ...prev,
       { type, endTime: Date.now() + duration, fromTeam: 'Binary Beasts' },
@@ -302,7 +408,7 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
-              onClick={onExitRound}
+              onClick={handleExitRound}
               className="text-gray-400 hover:text-white transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -351,6 +457,7 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
               isShieldActive={isShieldActive}
               onUseSabotage={handleUseSabotage}
               onActivateShield={handleActivateShield}
+              targets={allTeams.filter(t => t.name !== teamName)}
               onPurchaseToken={async (type, cost) => {
                 try {
                   const updatedStats = await purchaseToken(type, cost);
@@ -395,6 +502,50 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
           )}
         </div>
       </div>
+
+      {/* Disqualified Overlay */}
+      {isDisqualified && (
+        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-6 text-center backdrop-blur-sm">
+          <div className="max-w-md w-full bg-zinc-900 border border-red-900/50 rounded-2xl p-8 shadow-2xl shadow-red-900/20">
+            <div className="w-20 h-20 bg-red-900/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertTriangle className="w-10 h-10 text-red-500" />
+            </div>
+            <h2 className="text-3xl font-bold text-white mb-4">Disqualified</h2>
+            <p className="text-gray-400 mb-8 leading-relaxed">
+              Your team has been disqualified from this round due to a rules violation.
+              You can no longer participate in this competition.
+            </p>
+            <button
+              onClick={onExitRound}
+              className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-xl font-bold transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+            >
+              Return to Dashboard
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Warning Overlay */}
+      {!isFullscreen && !isDisqualified && !loading && (
+        <div className="fixed inset-0 z-[90] bg-black/90 flex items-center justify-center p-6 text-center backdrop-blur-md">
+          <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-2xl">
+            <div className="w-16 h-16 bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Maximize className="w-8 h-8 text-white animate-pulse" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-3">Full Screen Required</h2>
+            <p className="text-gray-400 mb-8">
+              To ensure a fair competition, this round must be completed in full screen mode.
+              Switching out of full screen or changing tabs may lead to disqualification.
+            </p>
+            <button
+              onClick={enterFullscreen}
+              className="w-full bg-white hover:bg-gray-200 text-black py-3 rounded-xl font-bold transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+            >
+              Enter Full Screen
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Debug: Simulate attacks (remove in production) */}
       <div className="fixed bottom-4 left-4 z-40 bg-zinc-900 border border-zinc-800 rounded-lg p-3 space-y-2">

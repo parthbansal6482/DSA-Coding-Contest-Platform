@@ -9,6 +9,7 @@ interface TacticalPanelProps {
   onUseSabotage: (targetTeam: string, sabotageType: string) => void;
   onActivateShield: () => void;
   onPurchaseToken: (type: 'sabotage' | 'shield', cost: number) => void;
+  targets: TeamTarget[];
 }
 
 interface TeamTarget {
@@ -26,22 +27,16 @@ export function TacticalPanel({
   onUseSabotage,
   onActivateShield,
   onPurchaseToken,
+  targets,
 }: TacticalPanelProps) {
   const [showModal, setShowModal] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<TeamTarget | null>(null);
 
-  const teams: TeamTarget[] = [
-    { id: '1', name: 'Algorithm Aces', rank: 1, hasShield: false },
-    { id: '2', name: 'Binary Beasts', rank: 2, hasShield: true },
-    { id: '4', name: 'Debug Squad', rank: 4, hasShield: false },
-    { id: '5', name: 'Runtime Rebels', rank: 5, hasShield: false },
-  ];
+
 
   const sabotageTypes = [
-    { id: 'blackout', name: 'Screen Blackout', duration: '30s' },
-    { id: 'typing-delay', name: 'Typing Delay', duration: '60s' },
-    { id: 'format-chaos', name: 'Format Chaos', duration: '45s' },
-    { id: 'ui-glitch', name: 'UI Glitch', duration: '30s' },
+    { id: 'blackout', name: 'Screen Blackout', duration: '3 min' },
+    { id: 'typing-delay', name: '2s Typing Delay', duration: '3 min' },
   ];
 
   const handleSabotage = (type: string) => {
@@ -128,8 +123,8 @@ export function TacticalPanel({
                       onClick={() => onPurchaseToken('sabotage', 50)}
                       disabled={currentPoints < 50}
                       className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${currentPoints >= 50
-                          ? 'bg-red-500 text-white hover:bg-red-600'
-                          : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
+                        ? 'bg-red-500 text-white hover:bg-red-600'
+                        : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
                         }`}
                     >
                       Buy for 50 pts
@@ -146,8 +141,8 @@ export function TacticalPanel({
                       onClick={() => onPurchaseToken('shield', 75)}
                       disabled={currentPoints < 75}
                       className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${currentPoints >= 75
-                          ? 'bg-blue-500 text-white hover:bg-blue-600'
-                          : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
+                        ? 'bg-blue-500 text-white hover:bg-blue-600'
+                        : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
                         }`}
                     >
                       Buy for 75 pts
@@ -188,7 +183,7 @@ export function TacticalPanel({
                     : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
                     }`}
                 >
-                  {isShieldActive ? 'Shield Active' : 'Activate Shield (10 min)'}
+                  {isShieldActive ? 'Shield Active' : 'Activate Shield (1 min)'}
                 </button>
               </div>
 
@@ -219,7 +214,7 @@ export function TacticalPanel({
                         Select Target Team
                       </h5>
                       <div className="grid grid-cols-2 gap-3">
-                        {teams.map((team) => (
+                        {targets.map((team) => (
                           <button
                             key={team.id}
                             onClick={() => setSelectedTarget(team)}

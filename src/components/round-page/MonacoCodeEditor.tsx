@@ -23,6 +23,7 @@ export function MonacoCodeEditor({
 }: MonacoCodeEditorProps) {
     const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const isThrottledRef = useRef(false);
 
     const handleEditorDidMount: OnMount = (editor, monaco) => {
         editorRef.current = editor;
@@ -44,14 +45,26 @@ export function MonacoCodeEditor({
         if (value === undefined) return;
 
         // Apply typing delay if sabotage is active
-        if (typingDelay > 0) {
+        if (typingDelay > 0 && !isThrottledRef.current) {
+            isThrottledRef.current = true;
+
+            // Set editor to read-only temporary
+            if (editorRef.current) {
+                editorRef.current.updateOptions({ readOnly: true });
+            }
+
             if (typingTimeoutRef.current) {
                 clearTimeout(typingTimeoutRef.current);
             }
+
             typingTimeoutRef.current = setTimeout(() => {
+                isThrottledRef.current = false;
+                if (editorRef.current) {
+                    editorRef.current.updateOptions({ readOnly: readOnly });
+                }
                 onChange(value);
             }, typingDelay);
-        } else {
+        } else if (typingDelay === 0) {
             onChange(value);
         }
     };

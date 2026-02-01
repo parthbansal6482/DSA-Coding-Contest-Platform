@@ -21,11 +21,51 @@ export interface SubmissionUpdate {
     timestamp: string;
 }
 
+export interface CheatingAlert {
+    teamName: string;
+    roundName: string;
+    violationType: string;
+    timestamp: string;
+}
+
+export interface DisqualificationUpdate {
+    teamName: string;
+    isDisqualified: boolean;
+    roundId: string;
+}
+
 class SocketService {
     private socket: Socket | null = null;
     private leaderboardCallbacks: Set<(data: LeaderboardTeam[]) => void> = new Set();
     private teamStatsCallbacks: Set<(data: TeamStatsUpdate) => void> = new Set();
     private submissionCallbacks: Set<(data: SubmissionUpdate) => void> = new Set();
+    private cheatingAlertCallbacks: Set<(data: CheatingAlert) => void> = new Set();
+    private disqualificationCallbacks: Set<(data: DisqualificationUpdate) => void> = new Set();
+    private alertBuffer: CheatingAlert[] = [];
+
+    constructor() {
+        this.loadAlertBuffer();
+    }
+
+    private loadAlertBuffer() {
+        try {
+            const saved = localStorage.getItem('cheating_alerts');
+            if (saved) {
+                this.alertBuffer = JSON.parse(saved);
+            }
+        } catch (error) {
+            console.error('Error loading alert buffer:', error);
+            this.alertBuffer = [];
+        }
+    }
+
+    private saveAlertBuffer() {
+        try {
+            localStorage.setItem('cheating_alerts', JSON.stringify(this.alertBuffer));
+        } catch (error) {
+            console.error('Error saving alert buffer:', error);
+        }
+    }
 
     /**
      * Connect to WebSocket server
@@ -70,6 +110,23 @@ class SocketService {
         this.socket.on('submission:update', (data: SubmissionUpdate) => {
             console.log('Submission update received:', data.questionId, data.status);
             this.submissionCallbacks.forEach((callback) => callback(data));
+        });
+
+        // Listen for cheating alerts (Admin)
+        this.socket.on('cheating:alert', (data: CheatingAlert) => {
+            console.log('Cheating alert received:', data.teamName, data.violationType);
+
+            // Add to buffer
+            this.alertBuffer = [data, ...this.alertBuffer].slice(0, 50);
+            this.saveAlertBuffer();
+
+            this.cheatingAlertCallbacks.forEach((callback) => callback(data));
+        });
+
+        // Listen for disqualification updates (Team)
+        this.socket.on('team:disqualification-update', (data: DisqualificationUpdate) => {
+            console.log('Disqualification update received:', data.teamName, data.isDisqualified);
+            this.disqualificationCallbacks.forEach((callback) => callback(data));
         });
     }
 
@@ -117,6 +174,50 @@ class SocketService {
         return () => {
             this.submissionCallbacks.delete(callback);
         };
+    }
+
+    /**
+     * Subscribe to cheating alerts (Admin only)
+     */
+    onCheatingAlert(callback: (data: CheatingAlert) => void) {
+        this.cheatingAlertCallbacks.add(callback);
+        return () => {
+            this.cheatingAlertCallbacks.delete(callback);
+        };
+    }
+
+    /**
+     * Subscribe to disqualification updates
+     */
+    onDisqualificationUpdate(callback: (data: DisqualificationUpdate) => void) {
+        this.disqualificationCallbacks.add(callback);
+        return () => {
+            this.disqualificationCallbacks.delete(callback);
+        };
+    }
+
+    /**
+     * Report a rules violation from the client
+     */
+    reportViolation(teamName: string, roundName: string, violationType: string) {
+        if (this.socket?.connected) {
+            this.socket.emit('cheating:violation', { teamName, roundName, violationType });
+        }
+    }
+
+    /**
+     * Get recent alerts from buffer
+     */
+    getRecentAlerts(): CheatingAlert[] {
+        return [...this.alertBuffer];
+    }
+
+    /**
+     * Clear all alerts from buffer and persistence
+     */
+    clearAlertBuffer() {
+        this.alertBuffer = [];
+        localStorage.removeItem('cheating_alerts');
     }
 
     /**

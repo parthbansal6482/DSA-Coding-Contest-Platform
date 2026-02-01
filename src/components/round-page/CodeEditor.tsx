@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { Play, Send, Loader2, CheckCircle, XCircle } from 'lucide-react';
-import { useTypingDelay, useFormatChaos } from './SabotageEffects';
 import { MonacoCodeEditor } from './MonacoCodeEditor';
 import { runCode, submitSolution } from '../../services/round.service';
 
@@ -22,7 +21,7 @@ interface Question {
 }
 
 interface SabotageEffect {
-  type: 'blackout' | 'typing-delay' | 'format-chaos' | 'ui-glitch';
+  type: 'blackout' | 'typing-delay';
   endTime: number;
   fromTeam?: string;
 }
@@ -245,22 +244,22 @@ export function CodeEditor({ roundId, question, activeEffects, isShieldActive, o
       </div>
 
       {/* Editor Area */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Code Editor */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           <MonacoCodeEditor
             language={language}
             value={code}
             onChange={setCode}
             readOnly={activeEffects.some((e) => e.type === 'blackout')}
-            typingDelay={activeEffects.find((e) => e.type === 'typing-delay') ? 300 : 0}
+            typingDelay={activeEffects.find((e) => e.type === 'typing-delay') ? 2000 : 0}
             onRun={handleRun}
             onSubmit={handleSubmit}
           />
         </div>
 
         {/* Results Panel - Always visible */}
-        <div className="w-96 border-l border-zinc-800 bg-zinc-900 overflow-y-auto">
+        <div className="w-96 flex-shrink-0 border-l border-zinc-800 bg-zinc-900 overflow-y-auto">
           <div className="p-6 space-y-4">
             <h3 className="text-lg font-bold text-white">Execution Results</h3>
 

@@ -53,9 +53,25 @@ export function TeamDashboard({ onEnterRound }: TeamDashboardProps) {
       }
     });
 
+    // Subscribe to disqualification updates
+    const unsubscribeDisqualification = socketService.onDisqualificationUpdate((data) => {
+      if (teamData && data.teamName === teamData.teamName) {
+        console.log('Real-time disqualification update received:', data.isDisqualified);
+        setTeamData(prev => {
+          if (!prev) return null;
+          const rounds = prev.disqualifiedRounds || [];
+          const updatedRounds = data.isDisqualified
+            ? [...new Set([...rounds, data.roundId])]
+            : rounds.filter(id => id !== data.roundId);
+          return { ...prev, disqualifiedRounds: updatedRounds };
+        });
+      }
+    });
+
     // Cleanup on unmount
     return () => {
       unsubscribeStats();
+      unsubscribeDisqualification();
     };
   }, [teamData?.teamName]);
 
@@ -189,7 +205,12 @@ export function TeamDashboard({ onEnterRound }: TeamDashboardProps) {
       <main className="flex-1 p-6 overflow-auto">
         {activeSection === 'home' && <DashboardHome teamData={teamData} />}
         {activeSection === 'leaderboard' && <Leaderboard currentTeam={teamData.teamName} />}
-        {activeSection === 'rounds' && <ActiveRounds onEnterRound={onEnterRound} />}
+        {activeSection === 'rounds' && (
+          <ActiveRounds
+            onEnterRound={onEnterRound}
+            disqualifiedRounds={teamData.disqualifiedRounds}
+          />
+        )}
         {activeSection === 'shop' && (
           <TokenShop
             currentPoints={teamData.points}

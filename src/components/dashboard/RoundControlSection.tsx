@@ -5,6 +5,8 @@ import {
   updateRoundStatus,
   Round as APIRound,
 } from '../../services/round.service';
+import { getAllTeams, toggleDisqualification } from '../../services/team.service';
+import { socketService, CheatingAlert } from '../../services/socket.service';
 
 interface Round {
   _id: string;
@@ -19,30 +21,64 @@ interface Round {
 
 export function RoundControlSection() {
   const [rounds, setRounds] = useState<Round[]>([]);
+  const [teams, setTeams] = useState<any[]>([]);
+  const [alerts, setAlerts] = useState<CheatingAlert[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchRounds();
+    fetchTeams();
+
+    // Connect to WebSocket
+    socketService.connect();
+
+    // Load buffered alerts
+    setAlerts(socketService.getRecentAlerts());
+
+    // Subscribe to cheating alerts
+    const unsubscribeAlerts = socketService.onCheatingAlert((alert) => {
+      setAlerts(prev => [alert, ...prev].slice(0, 50)); // Keep last 50 alerts
+    });
+
     const interval = setInterval(() => {
       fetchRounds();
       updateElapsedTimes();
     }, 1000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      unsubscribeAlerts();
+    };
   }, []);
 
   const fetchRounds = async () => {
     try {
       const data = await getAllRounds();
-      setRounds(data.map(r => ({
+      const mappedRounds = data.map(r => ({
         ...r,
         elapsedTime: calculateElapsedTime(r),
         status: mapStatus(r.status),
-      })));
+      }));
+      setRounds(mappedRounds);
+
+      if (mappedRounds.length > 0 && !selectedRoundId) {
+        setSelectedRoundId(mappedRounds[0]._id);
+      }
+
       setLoading(false);
     } catch (err) {
       console.error('Error fetching rounds:', err);
       setLoading(false);
+    }
+  };
+
+  const fetchTeams = async () => {
+    try {
+      const data = await getAllTeams('approved');
+      setTeams(data.teams || []);
+    } catch (err) {
+      console.error('Error fetching teams:', err);
     }
   };
 
@@ -135,6 +171,21 @@ export function RoundControlSection() {
     }
   };
 
+  const handleToggleDisqualification = async (teamId: string, roundId: string) => {
+    try {
+      await toggleDisqualification(teamId, roundId);
+      await fetchTeams(); // Refresh team data to show updated status
+    } catch (err) {
+      console.error('Error toggling disqualification:', err);
+      alert('Failed to toggle disqualification');
+    }
+  };
+
+  const clearAlerts = () => {
+    socketService.clearAlertBuffer();
+    setAlerts([]);
+  };
+
   const statusColors = {
     'upcoming': 'text-gray-500 bg-gray-500/10',
     'active': 'text-green-500 bg-green-500/10',
@@ -158,184 +209,236 @@ export function RoundControlSection() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h2 className="text-2xl font-bold text-white">Round Control</h2>
-        <p className="text-gray-400 mt-1">Monitor and control contest rounds in real-time</p>
-      </div>
-
-      {/* Active Round Alert */}
-      {activeRound && (
-        <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex items-center gap-3">
-          <AlertCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-          <div className="flex-1">
-            <p className="text-green-500 font-medium">Active Round: {activeRound.name}</p>
-            <p className="text-sm text-green-500/80 mt-1">
-              Time Remaining: {formatTime(getTimeRemaining(activeRound))}
-            </p>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="lg:col-span-2 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-white">Round Control</h2>
+            <p className="text-gray-400 mt-1">Monitor and control contest rounds in real-time</p>
           </div>
         </div>
-      )}
 
-      {/* Rounds Grid */}
-      <div className="grid grid-cols-1 gap-6">
-        {rounds.map((round) => {
-          const timeRemaining = getTimeRemaining(round);
-          const progress = getProgress(round);
-          const isWarning = timeRemaining <= 300 && round.status === 'active'; // 5 minutes
+        {/* Active Round Alert */}
+        {activeRound && (
+          <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-green-500 font-medium">Active Round: {activeRound.name}</p>
+              <p className="text-sm text-green-500/80 mt-1">
+                Time Remaining: {formatTime(getTimeRemaining(activeRound))}
+              </p>
+            </div>
+          </div>
+        )}
 
-          return (
-            <div
-              key={round._id}
-              className={`bg-zinc-900 border rounded-xl p-6 transition-all ${round.status === 'active'
+        {/* Rounds Grid */}
+        <div className="grid grid-cols-1 gap-6">
+          {rounds.map((round) => {
+            const timeRemaining = getTimeRemaining(round);
+            const progress = getProgress(round);
+            const isWarning = timeRemaining <= 300 && round.status === 'active'; // 5 minutes
+
+            return (
+              <div
+                key={round._id}
+                className={`bg-zinc-900 border rounded-xl p-6 transition-all ${round.status === 'active'
                   ? 'border-green-500 shadow-lg shadow-green-500/20'
                   : 'border-zinc-800'
-                }`}
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-xl font-bold text-white">{round.name}</h3>
+                  }`}
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h3 className="text-xl font-bold text-white">{round.name}</h3>
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[round.status]
+                          }`}
+                      >
+                        {statusLabels[round.status]}
+                      </span>
+                    </div>
+                    <p className="text-gray-400 text-sm">Duration: {round.duration} minutes</p>
+                  </div>
+                </div>
+
+                {/* Timer Display */}
+                <div className="mb-6">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-gray-400" />
+                      <span className="text-sm text-gray-400">Time Remaining</span>
+                    </div>
                     <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${statusColors[round.status]
+                      className={`text-2xl font-bold font-mono ${isWarning ? 'text-red-500' : 'text-white'
                         }`}
                     >
-                      {statusLabels[round.status]}
+                      {formatTime(timeRemaining)}
                     </span>
                   </div>
-                  <p className="text-gray-400 text-sm">Duration: {round.duration} minutes</p>
-                </div>
-              </div>
 
-              {/* Timer Display */}
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-gray-400" />
-                    <span className="text-sm text-gray-400">Time Remaining</span>
-                  </div>
-                  <span
-                    className={`text-2xl font-bold font-mono ${isWarning ? 'text-red-500' : 'text-white'
-                      }`}
-                  >
-                    {formatTime(timeRemaining)}
-                  </span>
-                </div>
-
-                {/* Progress Bar */}
-                <div className="w-full bg-zinc-800 rounded-full h-3 overflow-hidden">
-                  <div
-                    className={`h-full transition-all duration-1000 ${isWarning
+                  {/* Progress Bar */}
+                  <div className="w-full bg-zinc-800 rounded-full h-3 overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-1000 ${isWarning
                         ? 'bg-red-500'
                         : round.status === 'active'
                           ? 'bg-green-500'
                           : round.status === 'completed'
                             ? 'bg-blue-500'
                             : 'bg-gray-500'
-                      }`}
-                    style={{ width: `${progress}%` }}
-                  />
+                        }`}
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
+                    <span>Elapsed: {formatTime(round.elapsedTime)}</span>
+                    <span>Total: {formatTime(round.duration * 60)}</span>
+                  </div>
                 </div>
 
-                <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
-                  <span>Elapsed: {formatTime(round.elapsedTime)}</span>
-                  <span>Total: {formatTime(round.duration * 60)}</span>
-                </div>
-              </div>
-
-              {/* Control Buttons */}
-              <div className="flex gap-3">
-                {round.status === 'upcoming' && (
-                  <button
-                    onClick={() => handleStart(round._id)}
-                    className="flex-1 bg-white text-black py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Play className="w-5 h-5" />
-                    Start Round
-                  </button>
-                )}
-
-                {round.status === 'active' && (
-                  <>
+                {/* Control Buttons */}
+                <div className="flex gap-3">
+                  {round.status === 'upcoming' && (
                     <button
-                      onClick={() => handlePause(round._id)}
-                      className="flex-1 bg-yellow-500/10 text-yellow-500 border border-yellow-500/30 py-3 rounded-lg font-medium hover:bg-yellow-500/20 transition-colors flex items-center justify-center gap-2"
+                      onClick={() => handleStart(round._id)}
+                      className="flex-1 bg-white text-black py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
                     >
-                      <Pause className="w-5 h-5" />
-                      Pause
+                      <Play className="w-5 h-5" />
+                      Start Round
                     </button>
-                    <button
-                      onClick={() => handleStop(round._id)}
-                      className="flex-1 bg-red-500/10 text-red-500 border border-red-500/30 py-3 rounded-lg font-medium hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Square className="w-5 h-5" />
-                      Stop
-                    </button>
-                  </>
-                )}
+                  )}
 
-                {round.status === 'completed' && (
-                  <button
-                    onClick={() => handleReset(round._id)}
-                    className="flex-1 bg-zinc-800 text-white py-3 rounded-lg font-medium hover:bg-zinc-700 transition-colors"
-                  >
-                    Reset Round
-                  </button>
+                  {round.status === 'active' && (
+                    <>
+                      <button
+                        onClick={() => handlePause(round._id)}
+                        className="flex-1 bg-yellow-500/10 text-yellow-500 border border-yellow-500/30 py-3 rounded-lg font-medium hover:bg-yellow-500/20 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Pause className="w-5 h-5" />
+                        Pause
+                      </button>
+                      <button
+                        onClick={() => handleStop(round._id)}
+                        className="flex-1 bg-red-500/10 text-red-500 border border-red-500/30 py-3 rounded-lg font-medium hover:bg-red-500/20 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Square className="w-5 h-5" />
+                        Stop
+                      </button>
+                    </>
+                  )}
+
+                  {round.status === 'completed' && (
+                    <button
+                      onClick={() => handleReset(round._id)}
+                      className="flex-1 bg-zinc-800 text-white py-3 rounded-lg font-medium hover:bg-zinc-700 transition-colors"
+                    >
+                      Reset Round
+                    </button>
+                  )}
+                </div>
+
+                {/* Additional Info */}
+                {round.status === 'active' && isWarning && (
+                  <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                    <p className="text-sm text-red-500 font-medium">
+                      ⚠️ Less than 5 minutes remaining!
+                    </p>
+                  </div>
                 )}
               </div>
-
-              {/* Additional Info */}
-              {round.status === 'active' && isWarning && (
-                <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                  <p className="text-sm text-red-500 font-medium">
-                    ⚠️ Less than 5 minutes remaining!
-                  </p>
-                </div>
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
-      {/* Control Instructions */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Control Instructions</h3>
-        <div className="space-y-2 text-sm text-gray-400">
-          <div className="flex items-start gap-2">
-            <span className="text-white">•</span>
-            <p>
-              <span className="text-white font-medium">Start:</span> Begin the round timer. Teams
-              will be able to view and submit answers to questions.
-            </p>
+      {/* Sidebar: Violations and Team Status */}
+      <div className="space-y-6">
+        {/* Real-time Alerts */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col h-[400px]">
+          <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
+            <div className="flex items-center gap-2 text-red-500">
+              <AlertCircle className="w-5 h-5" />
+              <h3 className="font-bold">Recent Violations</h3>
+            </div>
+            {alerts.length > 0 && (
+              <button
+                onClick={clearAlerts}
+                className="text-xs text-gray-500 hover:text-white transition-colors"
+              >
+                Clear All
+              </button>
+            )}
           </div>
-          <div className="flex items-start gap-2">
-            <span className="text-white">•</span>
-            <p>
-              <span className="text-white font-medium">Pause:</span> Temporarily pause the round.
-              The timer will stop and teams cannot submit during this time.
-            </p>
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {alerts.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
+                <AlertCircle className="w-8 h-8 mb-2" />
+                <p className="text-sm">No violations detected</p>
+              </div>
+            ) : (
+              alerts.map((alert, idx) => (
+                <div key={idx} className="bg-black/40 border border-red-900/20 rounded-lg p-3 text-sm animate-in fade-in slide-in-from-right-4">
+                  <div className="flex justify-between items-start mb-1">
+                    <span className="text-red-400 font-bold">{alert.teamName}</span>
+                    <span className="text-[10px] text-gray-600">
+                      {new Date(alert.timestamp).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  <p className="text-gray-400 text-xs">
+                    Violation: <span className="text-white">{alert.violationType}</span>
+                  </p>
+                  <p className="text-gray-500 text-[10px] mt-1 italic">
+                    Round: {alert.roundName}
+                  </p>
+                </div>
+              ))
+            )}
           </div>
-          <div className="flex items-start gap-2">
-            <span className="text-white">•</span>
-            <p>
-              <span className="text-white font-medium">Resume:</span> Continue a paused round from
-              where it was stopped.
-            </p>
+        </div>
+
+        {/* Team Disqualification Status */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-zinc-800 bg-zinc-900/50">
+            <h3 className="font-bold text-white">Round Participation</h3>
+            <select
+              value={selectedRoundId || ''}
+              onChange={(e) => setSelectedRoundId(e.target.value)}
+              className="mt-2 w-full bg-black border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-white"
+            >
+              {rounds.map(r => (
+                <option key={r._id} value={r._id}>{r.name}</option>
+              ))}
+            </select>
           </div>
-          <div className="flex items-start gap-2">
-            <span className="text-white">•</span>
-            <p>
-              <span className="text-white font-medium">Stop:</span> End the round immediately. This
-              action cannot be undone.
-            </p>
-          </div>
-          <div className="flex items-start gap-2">
-            <span className="text-white">•</span>
-            <p>
-              <span className="text-white font-medium">Reset:</span> Reset a completed round back
-              to its initial state.
-            </p>
+
+          <div className="p-4 space-y-3 max-h-[400px] overflow-y-auto">
+            {teams.map((team) => {
+              const roundedId = selectedRoundId || '';
+              const isDisqualified = team.disqualifiedRounds?.includes(roundedId);
+
+              return (
+                <div key={team._id} className="flex items-center justify-between bg-black/40 rounded-lg p-3 border border-zinc-800">
+                  <div>
+                    <p className="text-sm font-medium text-white">{team.teamName}</p>
+                    <p className={`text-[10px] ${isDisqualified ? 'text-red-500' : 'text-green-500'}`}>
+                      {isDisqualified ? 'Disqualified' : 'Active'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleToggleDisqualification(team._id, roundedId)}
+                    className={`px-3 py-1 rounded text-[10px] font-bold transition-colors ${isDisqualified
+                      ? 'bg-green-600/10 text-green-500 hover:bg-green-600/20'
+                      : 'bg-red-600/10 text-red-500 hover:bg-red-600/20'
+                      }`}
+                  >
+                    {isDisqualified ? 'Re-enable' : 'Disqualify'}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

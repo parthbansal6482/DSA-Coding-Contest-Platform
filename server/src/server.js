@@ -4,7 +4,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const connectDB = require('./config/database');
-const { initializeSocket, getLeaderboardData } = require('./socket');
+const { initializeSocket, getLeaderboardData, broadcastCheatingViolation } = require('./socket');
 
 // Import routes
 const adminRoutes = require('./routes/admin.routes');
@@ -42,6 +42,12 @@ io.on('connection', async (socket) => {
     } catch (error) {
         console.error('Error sending initial leaderboard:', error);
     }
+
+    // Handle cheating violations reported by clients
+    socket.on('cheating:violation', ({ teamName, roundName, violationType }) => {
+        console.log(`Violation reported: ${teamName} - ${violationType} in ${roundName}`);
+        broadcastCheatingViolation(teamName, roundName, violationType);
+    });
 
     socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);

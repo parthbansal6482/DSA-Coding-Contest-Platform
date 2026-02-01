@@ -89,6 +89,10 @@ const teamSchema = new mongoose.Schema(
         approvedAt: {
             type: Date,
         },
+        disqualifiedRounds: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Round',
+        }],
     },
     {
         timestamps: true,

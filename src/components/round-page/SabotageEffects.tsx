@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { AlertTriangle, Shield as ShieldIcon, X } from 'lucide-react';
 
 interface SabotageEffect {
-  type: 'blackout' | 'typing-delay' | 'format-chaos' | 'ui-glitch';
+  type: 'blackout' | 'typing-delay';
   endTime: number;
   fromTeam?: string;
 }
@@ -37,7 +37,12 @@ export function SabotageEffects({ activeEffects, isShieldActive, onEffectEnd }: 
   }, [activeEffects, onEffectEnd]);
 
   const hasBlackout = activeEffects.some((e) => e.type === 'blackout');
-  const hasGlitch = activeEffects.some((e) => e.type === 'ui-glitch');
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
     <>
@@ -68,12 +73,10 @@ export function SabotageEffects({ activeEffects, isShieldActive, onEffectEnd }: 
                   <p className="text-red-400 font-bold mb-1">Under Attack!</p>
                   <p className="text-red-300 text-sm mb-2">
                     {effect.type === 'blackout' && 'Screen Blackout Active'}
-                    {effect.type === 'typing-delay' && 'Typing Delay Active'}
-                    {effect.type === 'format-chaos' && 'Format Chaos Active'}
-                    {effect.type === 'ui-glitch' && 'UI Glitch Active'}
+                    {effect.type === 'typing-delay' && '2s Typing Delay Active'}
                   </p>
                   <p className="text-red-200 text-xs">
-                    {timeRemaining[effect.type]}s remaining
+                    {formatTime(timeRemaining[effect.type] || 0)} remaining
                   </p>
                 </div>
               </div>
@@ -84,86 +87,17 @@ export function SabotageEffects({ activeEffects, isShieldActive, onEffectEnd }: 
 
       {/* Screen Blackout Effect */}
       {hasBlackout && !isShieldActive && (
-        <div className="fixed inset-0 z-50 bg-black animate-pulse pointer-events-none">
-          <div className="absolute inset-0 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 bg-black pointer-events-none">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
             <div className="text-red-500 text-4xl font-bold animate-pulse">
               SCREEN BLACKOUT ACTIVE
+            </div>
+            <div className="text-red-400 text-2xl font-mono">
+              Time Left: {formatTime(timeRemaining['blackout'] || 0)}
             </div>
           </div>
         </div>
       )}
-
-      {/* UI Glitch Effect */}
-      {hasGlitch && !isShieldActive && (
-        <div className="fixed inset-0 z-50 pointer-events-none">
-          <div className="absolute inset-0 bg-gradient-to-r from-red-500/10 via-transparent to-blue-500/10 animate-pulse" />
-          <div className="absolute inset-0 glitch-effect" />
-        </div>
-      )}
     </>
   );
-}
-
-// Add typing delay hook
-export function useTypingDelay(activeEffects: SabotageEffect[], isShieldActive: boolean) {
-  const [delayedValue, setDelayedValue] = useState('');
-  const [pendingValue, setPendingValue] = useState('');
-
-  const hasTypingDelay = activeEffects.some((e) => e.type === 'typing-delay') && !isShieldActive;
-
-  useEffect(() => {
-    if (!hasTypingDelay) {
-      setDelayedValue(pendingValue);
-      return;
-    }
-
-    const timeout = setTimeout(() => {
-      setDelayedValue(pendingValue);
-    }, 2000); // 2 second delay
-
-    return () => clearTimeout(timeout);
-  }, [pendingValue, hasTypingDelay]);
-
-  return {
-    value: delayedValue,
-    setValue: setPendingValue,
-    isDelayed: hasTypingDelay,
-  };
-}
-
-// Add format chaos hook
-export function useFormatChaos(activeEffects: SabotageEffect[], isShieldActive: boolean) {
-  const hasFormatChaos = activeEffects.some((e) => e.type === 'format-chaos') && !isShieldActive;
-  const [chaos, setChaos] = useState(false);
-
-  useEffect(() => {
-    if (!hasFormatChaos) {
-      setChaos(false);
-      return;
-    }
-
-    // Apply random formatting changes
-    const interval = setInterval(() => {
-      setChaos((prev) => !prev);
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [hasFormatChaos]);
-
-  const applyFormatChaos = (code: string) => {
-    if (!hasFormatChaos || !chaos) return code;
-
-    // Randomly add or remove spaces/newlines
-    return code
-      .split('\n')
-      .map((line) => {
-        if (Math.random() > 0.7) {
-          return '  '.repeat(Math.floor(Math.random() * 3)) + line;
-        }
-        return line;
-      })
-      .join('\n');
-  };
-
-  return { applyFormatChaos, hasFormatChaos };
 }
