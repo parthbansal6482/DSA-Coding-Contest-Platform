@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { LeaderboardTeam } from './team.service';
 
-const SOCKET_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace('/api', '') || 'http://localhost:5000';
+const SOCKET_URL = window.location.origin;
 
 export interface TeamStatsUpdate {
     teamName: string;
@@ -26,6 +26,8 @@ export interface CheatingAlert {
     roundName: string;
     violationType: string;
     timestamp: string;
+    action?: 'start' | 'end';
+    duration?: number; // In seconds
 }
 
 export interface DisqualificationUpdate {
@@ -41,6 +43,7 @@ class SocketService {
     private submissionCallbacks: Set<(data: SubmissionUpdate) => void> = new Set();
     private cheatingAlertCallbacks: Set<(data: CheatingAlert) => void> = new Set();
     private disqualificationCallbacks: Set<(data: DisqualificationUpdate) => void> = new Set();
+    private sabotageCallbacks: Set<(data: any) => void> = new Set();
     private alertBuffer: CheatingAlert[] = [];
 
     constructor() {
@@ -128,6 +131,12 @@ class SocketService {
             console.log('Disqualification update received:', data.teamName, data.isDisqualified);
             this.disqualificationCallbacks.forEach((callback) => callback(data));
         });
+
+        // Listen for sabotage attacks
+        this.socket.on('team:sabotage', (data: any) => {
+            console.log('Sabotage attack received:', data.type, 'from', data.attackerTeamName);
+            this.sabotageCallbacks.forEach((callback) => callback(data));
+        });
     }
 
     /**
@@ -197,11 +206,21 @@ class SocketService {
     }
 
     /**
+     * Subscribe to sabotage attacks
+     */
+    onSabotageAttack(callback: (data: any) => void) {
+        this.sabotageCallbacks.add(callback);
+        return () => {
+            this.sabotageCallbacks.delete(callback);
+        };
+    }
+
+    /**
      * Report a rules violation from the client
      */
-    reportViolation(teamName: string, roundName: string, violationType: string) {
+    reportViolation(teamName: string, roundName: string, violationType: string, action?: 'start' | 'end', duration?: number) {
         if (this.socket?.connected) {
-            this.socket.emit('cheating:violation', { teamName, roundName, violationType });
+            this.socket.emit('cheating:violation', { teamName, roundName, violationType, action, duration });
         }
     }
 

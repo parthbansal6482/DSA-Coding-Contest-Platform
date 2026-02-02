@@ -22,24 +22,12 @@ interface Round {
 export function RoundControlSection() {
   const [rounds, setRounds] = useState<Round[]>([]);
   const [teams, setTeams] = useState<any[]>([]);
-  const [alerts, setAlerts] = useState<CheatingAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRoundId, setSelectedRoundId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchRounds();
     fetchTeams();
-
-    // Connect to WebSocket
-    socketService.connect();
-
-    // Load buffered alerts
-    setAlerts(socketService.getRecentAlerts());
-
-    // Subscribe to cheating alerts
-    const unsubscribeAlerts = socketService.onCheatingAlert((alert) => {
-      setAlerts(prev => [alert, ...prev].slice(0, 50)); // Keep last 50 alerts
-    });
 
     const interval = setInterval(() => {
       fetchRounds();
@@ -48,7 +36,6 @@ export function RoundControlSection() {
 
     return () => {
       clearInterval(interval);
-      unsubscribeAlerts();
     };
   }, []);
 
@@ -171,6 +158,7 @@ export function RoundControlSection() {
     }
   };
 
+
   const handleToggleDisqualification = async (teamId: string, roundId: string) => {
     try {
       await toggleDisqualification(teamId, roundId);
@@ -179,11 +167,6 @@ export function RoundControlSection() {
       console.error('Error toggling disqualification:', err);
       alert('Failed to toggle disqualification');
     }
-  };
-
-  const clearAlerts = () => {
-    socketService.clearAlertBuffer();
-    setAlerts([]);
   };
 
   const statusColors = {
@@ -355,49 +338,6 @@ export function RoundControlSection() {
 
       {/* Sidebar: Violations and Team Status */}
       <div className="space-y-6">
-        {/* Real-time Alerts */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden flex flex-col h-[400px]">
-          <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
-            <div className="flex items-center gap-2 text-red-500">
-              <AlertCircle className="w-5 h-5" />
-              <h3 className="font-bold">Recent Violations</h3>
-            </div>
-            {alerts.length > 0 && (
-              <button
-                onClick={clearAlerts}
-                className="text-xs text-gray-500 hover:text-white transition-colors"
-              >
-                Clear All
-              </button>
-            )}
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {alerts.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
-                <AlertCircle className="w-8 h-8 mb-2" />
-                <p className="text-sm">No violations detected</p>
-              </div>
-            ) : (
-              alerts.map((alert, idx) => (
-                <div key={idx} className="bg-black/40 border border-red-900/20 rounded-lg p-3 text-sm animate-in fade-in slide-in-from-right-4">
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="text-red-400 font-bold">{alert.teamName}</span>
-                    <span className="text-[10px] text-gray-600">
-                      {new Date(alert.timestamp).toLocaleTimeString()}
-                    </span>
-                  </div>
-                  <p className="text-gray-400 text-xs">
-                    Violation: <span className="text-white">{alert.violationType}</span>
-                  </p>
-                  <p className="text-gray-500 text-[10px] mt-1 italic">
-                    Round: {alert.roundName}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
 
         {/* Team Disqualification Status */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">

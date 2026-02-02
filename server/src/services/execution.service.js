@@ -49,13 +49,23 @@ const LANGUAGE_CONFIG = {
  * @returns {Promise<Object>} Execution result
  */
 async function executeCode(code, language, input = '') {
-    const config = LANGUAGE_CONFIG[language.toLowerCase()];
+    const lang = language.toLowerCase();
+    const config = LANGUAGE_CONFIG[lang];
 
     if (!config) {
         throw new Error(`Unsupported language: ${language}`);
     }
 
-    const filename = `code${config.extension}`;
+    let filename = `code${config.extension}`;
+
+    // For Java, the filename MUST match the public class name
+    if (lang === 'java') {
+        const classMatch = code.match(/public\s+class\s+([A-Za-z0-9_]+)/) ||
+            code.match(/class\s+([A-Za-z0-9_]+)/);
+        const className = classMatch ? classMatch[1] : 'Main';
+        filename = `${className}.java`;
+    }
+
     const startTime = Date.now();
 
     try {

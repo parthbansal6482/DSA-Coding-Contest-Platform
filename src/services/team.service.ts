@@ -27,6 +27,8 @@ export interface TeamStats {
     };
     activeRoundsCount: number;
     disqualifiedRounds?: string[];
+    sabotageCooldownUntil?: string;
+    shieldCooldownUntil?: string;
 }
 
 export interface TeamActivity {
@@ -38,6 +40,7 @@ export interface TeamActivity {
 }
 
 export interface LeaderboardTeam {
+    _id: string;
     rank: number;
     teamName: string;
     points: number;
@@ -46,6 +49,7 @@ export interface LeaderboardTeam {
         sabotage: number;
         shield: number;
     };
+    shieldActive?: boolean;
 }
 
 /**

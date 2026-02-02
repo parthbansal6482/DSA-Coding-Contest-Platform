@@ -5,6 +5,7 @@ import { getAllTeams, approveTeam, rejectTeam } from '../../services/team.servic
 interface Member {
   name: string;
   email: string;
+  phone: string;
 }
 
 interface Team {
@@ -268,13 +269,13 @@ export function TeamsSection() {
               {selectedTeam.status === 'pending' && (
                 <div className="flex gap-3 pt-4">
                   <button
-                    onClick={() => handleReject(selectedTeam.id)}
+                    onClick={() => handleReject(selectedTeam._id)}
                     className="flex-1 bg-red-500/10 text-red-500 py-3 rounded-lg font-medium hover:bg-red-500/20 transition-colors"
                   >
                     Reject Team
                   </button>
                   <button
-                    onClick={() => handleApprove(selectedTeam.id)}
+                    onClick={() => handleApprove(selectedTeam._id)}
                     className="flex-1 bg-white text-black py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors"
                   >
                     Approve Team

@@ -1,15 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Clock, Zap, Shield as ShieldIcon, Maximize, AlertTriangle } from 'lucide-react';
 import { QuestionList } from './round-page/QuestionList';
 import { ProblemView } from './round-page/ProblemView';
 import { TacticalPanel } from './round-page/TacticalPanel';
 import { SabotageEffects } from './round-page/SabotageEffects';
 import { getRoundQuestions } from '../services/round.service';
-import { getTeamStats, purchaseToken, getLeaderboard, LeaderboardTeam } from '../services/team.service';
+import { getTeamStats, purchaseToken, getLeaderboard, LeaderboardTeam, launchSabotage, activateShield } from '../services/team.service';
 import { socketService } from '../services/socket.service';
 
 interface Question {
   _id: string;
+  id: string;
   title: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   points: number;
@@ -77,6 +78,10 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isDisqualified, setIsDisqualified] = useState(false);
   const [showExitWarning, setShowExitWarning] = useState(false);
+  const [sabotageCooldown, setSabotageCooldown] = useState<number | null>(null);
+  const [shieldCooldown, setShieldCooldown] = useState<number | null>(null);
+  const [tacticalMessage, setTacticalMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
+  const violationRef = useRef<{ startTime: number | null, type: string | null }>({ startTime: null, type: null });
 
   // Fetch round data and team stats
   useEffect(() => {
@@ -95,6 +100,7 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
         // Map backend question structure to frontend
         const mappedQuestions: Question[] = roundResponse.data.questions.map((q: any) => ({
           _id: q._id,
+          id: q._id,
           title: q.title,
           difficulty: q.difficulty,
           points: q.difficulty === 'Easy' ? 100 : q.difficulty === 'Medium' ? 150 : 200,
@@ -120,6 +126,14 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
         setSabotageTokens(teamStats.tokens?.sabotage || 0);
         setShieldTokens(teamStats.tokens?.shield || 0);
 
+        // Cooldowns
+        if (teamStats.sabotageCooldownUntil) {
+          setSabotageCooldown(new Date(teamStats.sabotageCooldownUntil).getTime());
+        }
+        if (teamStats.shieldCooldownUntil) {
+          setShieldCooldown(new Date(teamStats.shieldCooldownUntil).getTime());
+        }
+
         // Check if team is disqualified from this round
         if (teamStats.disqualifiedRounds?.includes(roundId)) {
           setIsDisqualified(true);
@@ -127,12 +141,14 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
 
         // Fetch all teams for tactical panel
         const leaderboard = await getLeaderboard();
-        const mappedTeams: TeamTarget[] = leaderboard.map((t) => ({
-          id: t.teamName, // Using teamName as ID since backend uses names in many places
-          name: t.teamName,
-          rank: t.rank,
-          hasShield: false, // We don't have shield status in leaderboard yet
-        }));
+        const mappedTeams: TeamTarget[] = leaderboard
+          .filter(t => t.teamName !== (teamStats.teamName || 'Your Team')) // Don't target yourself
+          .map((t) => ({
+            id: t._id,
+            name: t.teamName,
+            rank: t.rank,
+            hasShield: false, // Hidden as requested
+          }));
         setAllTeams(mappedTeams);
       } catch (err: any) {
         console.error('Error fetching round data:', err);
@@ -189,13 +205,32 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
       }
     });
 
+    // Subscribe to sabotage attacks
+    const unsubscribeSabotage = socketService.onSabotageAttack((data) => {
+      if (data.targetTeamName === teamName) {
+        console.log('You are being sabotaged!', data.type, 'from', data.attackerTeamName);
+
+        // Sabotage lasts 3 minutes
+        const duration = 180000;
+        setActiveEffects((prev) => [
+          ...prev,
+          {
+            type: data.type as SabotageEffect['type'],
+            endTime: Date.now() + duration,
+            fromTeam: data.attackerTeamName
+          },
+        ]);
+      }
+    });
+
     // Cleanup on unmount
     return () => {
       unsubscribeStats();
       unsubscribeSubmission();
       unsubscribeDisqualification();
+      unsubscribeSabotage();
     };
-  }, [teamName]);
+  }, [teamName, roundId]);
 
   // Real-time timer countdown
   useEffect(() => {
@@ -258,20 +293,39 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden' && !isDisqualified) {
         console.warn('Tab switch detected!');
-        socketService.reportViolation(teamName, round?.name || 'Unknown Round', 'tab-switch');
+        const now = Date.now();
+        violationRef.current = { startTime: now, type: 'tab-switch' };
+        socketService.reportViolation(teamName, round?.name || 'Unknown Round', 'tab-switch', 'start');
+      } else if (document.visibilityState === 'visible' && violationRef.current.startTime && violationRef.current.type === 'tab-switch') {
+        const duration = Math.round((Date.now() - violationRef.current.startTime) / 1000);
+        console.log(`Tab switch ended. Duration: ${duration}s`);
+        socketService.reportViolation(teamName, round?.name || 'Unknown Round', 'tab-switch', 'end', duration);
+        violationRef.current = { startTime: null, type: null };
       }
     };
 
     const handleWindowBlur = () => {
-      if (!isDisqualified) {
+      if (!isDisqualified && !violationRef.current.startTime) {
         console.warn('Window blur detected!');
-        socketService.reportViolation(teamName, round?.name || 'Unknown Round', 'window-blur');
+        const now = Date.now();
+        violationRef.current = { startTime: now, type: 'window-blur' };
+        socketService.reportViolation(teamName, round?.name || 'Unknown Round', 'window-blur', 'start');
+      }
+    };
+
+    const handleWindowFocus = () => {
+      if (violationRef.current.startTime && violationRef.current.type === 'window-blur') {
+        const duration = Math.round((Date.now() - violationRef.current.startTime) / 1000);
+        console.log(`Window blur ended. Duration: ${duration}s`);
+        socketService.reportViolation(teamName, round?.name || 'Unknown Round', 'window-blur', 'end', duration);
+        violationRef.current = { startTime: null, type: null };
       }
     };
 
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('blur', handleWindowBlur);
+    window.addEventListener('focus', handleWindowFocus);
 
     // Initial check
     setIsFullscreen(!!document.fullscreenElement);
@@ -280,6 +334,7 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('blur', handleWindowBlur);
+      window.removeEventListener('focus', handleWindowFocus);
     };
   }, [loading, isDisqualified, teamName, round?.name]);
 
@@ -325,23 +380,62 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
     .filter((q) => q.status === 'solved')
     .reduce((sum, q) => sum + q.points, 0);
 
-  const handleUseSabotage = (targetTeam: string, sabotageType: string) => {
+  const handleUseSabotage = async (targetTeamId: string, sabotageType: string) => {
     if (sabotageTokens > 0) {
-      setSabotageTokens((prev) => prev - 1);
-      alert(`Launched ${sabotageType} attack on ${targetTeam}!`);
-      // TODO: Implement real sabotage via WebSocket
+      try {
+        const response = await launchSabotage(targetTeamId, sabotageType);
+        if (response.success) {
+          setSabotageTokens((prev) => prev - 1);
+          setTacticalMessage({ text: `Launched ${sabotageType} attack!`, type: 'success' });
+          if (response.data?.cooldownUntil) {
+            setSabotageCooldown(new Date(response.data.cooldownUntil).getTime());
+          }
+          setTimeout(() => setTacticalMessage(null), 3000);
+        }
+      } catch (err: any) {
+        console.error('Failed to launch sabotage:', err);
+        const message = err.response?.data?.message || 'Failed to launch sabotage';
+        setTacticalMessage({ text: message, type: 'error' });
+        if (err.response?.data?.cooldownUntil) {
+          setSabotageCooldown(new Date(err.response.data.cooldownUntil).getTime());
+        }
+        setTimeout(() => setTacticalMessage(null), 5000);
+      }
     }
   };
 
-  const handleActivateShield = () => {
+  const handleActivateShield = async () => {
     if (shieldTokens > 0 && !isShieldActive) {
-      setShieldTokens((prev) => prev - 1);
-      setIsShieldActive(true);
-      // Shield lasts 1 minute
-      setTimeout(() => {
-        setIsShieldActive(false);
-      }, 60000);
-      // TODO: Implement real shield activation via API
+      try {
+        const response = await activateShield();
+        if (response.success) {
+          setShieldTokens((prev) => prev - 1);
+          setIsShieldActive(true);
+          setTacticalMessage({ text: 'Shield activated!', type: 'success' });
+
+          if (response.data?.shieldCooldownUntil) {
+            setShieldCooldown(new Date(response.data.shieldCooldownUntil).getTime());
+          }
+
+          // Shield duration from response or default to 10 mins (backend default)
+          const duration = response.data?.shieldExpiresAt
+            ? new Date(response.data.shieldExpiresAt).getTime() - Date.now()
+            : 600000;
+
+          setTimeout(() => {
+            setIsShieldActive(false);
+          }, duration);
+          setTimeout(() => setTacticalMessage(null), 3000);
+        }
+      } catch (err: any) {
+        console.error('Failed to activate shield:', err);
+        const message = err.response?.data?.message || 'Failed to activate shield';
+        setTacticalMessage({ text: message, type: 'error' });
+        if (err.response?.data?.cooldownUntil) {
+          setShieldCooldown(new Date(err.response.data.cooldownUntil).getTime());
+        }
+        setTimeout(() => setTacticalMessage(null), 5000);
+      }
     }
   };
 
@@ -349,19 +443,6 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
     setActiveEffects((prev) => prev.filter((e) => e !== effect));
   };
 
-  // Simulate incoming attack (for demo purposes)
-  const simulateAttack = (type: SabotageEffect['type']) => {
-    if (isShieldActive) {
-      alert('Your shield blocked the attack!');
-      return;
-    }
-    // Sabotage lasts 3 minutes
-    const duration = 180000;
-    setActiveEffects((prev) => [
-      ...prev,
-      { type, endTime: Date.now() + duration, fromTeam: 'Binary Beasts' },
-    ]);
-  };
 
   // Loading state
   if (loading) {
@@ -457,7 +538,6 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
               isShieldActive={isShieldActive}
               onUseSabotage={handleUseSabotage}
               onActivateShield={handleActivateShield}
-              targets={allTeams.filter(t => t.name !== teamName)}
               onPurchaseToken={async (type, cost) => {
                 try {
                   const updatedStats = await purchaseToken(type, cost);
@@ -466,13 +546,32 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
                   setShieldTokens(updatedStats.tokens.shield);
                 } catch (err: any) {
                   console.error('Error purchasing token:', err);
-                  alert(err.response?.data?.message || 'Failed to purchase token');
+                  setTacticalMessage({ text: err.response?.data?.message || 'Failed to purchase token', type: 'error' });
+                  setTimeout(() => setTacticalMessage(null), 3000);
                 }
               }}
+              targets={allTeams}
+              sabotageCooldown={sabotageCooldown}
+              shieldCooldown={shieldCooldown}
+              message={tacticalMessage}
             />
           </div>
         </div>
       </header>
+
+      {/* Tactical Message Notification */}
+      {tacticalMessage && (
+        <div className={`fixed top-24 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 rounded-xl border shadow-2xl transition-all duration-300 animate-in fade-in slide-in-from-top-4 ${tacticalMessage.type === 'success'
+          ? 'bg-green-500/10 border-green-500/50 text-green-500'
+          : 'bg-red-500/10 border-red-500/50 text-red-500'
+          }`}>
+          <div className="flex items-center gap-3">
+            <AlertTriangle className={`w-5 h-5 ${tacticalMessage.type === 'success' ? 'hidden' : ''}`} />
+            <Zap className={`w-5 h-5 ${tacticalMessage.type === 'error' ? 'hidden' : ''}`} />
+            <span className="font-bold">{tacticalMessage.text}</span>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
@@ -547,34 +646,6 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
         </div>
       )}
 
-      {/* Debug: Simulate attacks (remove in production) */}
-      <div className="fixed bottom-4 left-4 z-40 bg-zinc-900 border border-zinc-800 rounded-lg p-3 space-y-2">
-        <p className="text-xs text-gray-400 mb-2">Debug: Simulate Attacks</p>
-        <button
-          onClick={() => simulateAttack('blackout')}
-          className="w-full text-xs bg-black text-white px-3 py-1 rounded hover:bg-zinc-800"
-        >
-          Blackout
-        </button>
-        <button
-          onClick={() => simulateAttack('typing-delay')}
-          className="w-full text-xs bg-black text-white px-3 py-1 rounded hover:bg-zinc-800"
-        >
-          Typing Delay
-        </button>
-        <button
-          onClick={() => simulateAttack('ui-glitch')}
-          className="w-full text-xs bg-black text-white px-3 py-1 rounded hover:bg-zinc-800"
-        >
-          UI Glitch
-        </button>
-        <button
-          onClick={() => simulateAttack('format-chaos')}
-          className="w-full text-xs bg-black text-white px-3 py-1 rounded hover:bg-zinc-800"
-        >
-          Format Chaos
-        </button>
-      </div>
     </div>
   );
 }

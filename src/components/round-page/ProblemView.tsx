@@ -5,6 +5,7 @@ import { CodeEditor } from './CodeEditor';
 
 interface Question {
   _id: string;
+  id: string;
   title: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   points: number;
@@ -13,7 +14,7 @@ interface Question {
 }
 
 interface SabotageEffect {
-  type: 'blackout' | 'typing-delay';
+  type: 'blackout' | 'typing-delay' | 'format-chaos' | 'ui-glitch';
   endTime: number;
   fromTeam?: string;
 }

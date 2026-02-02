@@ -13,6 +13,7 @@ import { QuestionsSection } from './dashboard/QuestionsSection';
 import { RoundsSection } from './dashboard/RoundsSection';
 import { TeamsSection } from './dashboard/TeamsSection';
 import { RoundControlSection } from './dashboard/RoundControlSection';
+import { CheatingAlertsList } from './dashboard/CheatingAlertsList';
 
 type Section = 'overview' | 'questions' | 'rounds' | 'teams' | 'control';
 
@@ -225,43 +226,49 @@ function OverviewSection({ onNavigate }: { onNavigate: (section: Section) => voi
         ))}
       </div>
 
-      {/* Quick Actions */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-        <h3 className="text-lg font-semibold text-white mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <button
-            onClick={() => onNavigate('questions')}
-            className="bg-black border border-zinc-800 rounded-lg p-4 text-left hover:border-zinc-600 transition-colors"
-          >
-            <FileQuestion className="w-6 h-6 text-gray-400 mb-2" />
-            <p className="text-white font-medium">Add Question</p>
-            <p className="text-xs text-gray-400 mt-1">Create new DSA problem</p>
-          </button>
-          <button
-            onClick={() => onNavigate('rounds')}
-            className="bg-black border border-zinc-800 rounded-lg p-4 text-left hover:border-zinc-600 transition-colors"
-          >
-            <Layers className="w-6 h-6 text-gray-400 mb-2" />
-            <p className="text-white font-medium">Create Round</p>
-            <p className="text-xs text-gray-400 mt-1">Setup new contest round</p>
-          </button>
-          <button
-            onClick={() => onNavigate('teams')}
-            className="bg-black border border-zinc-800 rounded-lg p-4 text-left hover:border-zinc-600 transition-colors"
-          >
-            <Users className="w-6 h-6 text-gray-400 mb-2" />
-            <p className="text-white font-medium">Review Teams</p>
-            <p className="text-xs text-gray-400 mt-1">Approve pending teams</p>
-          </button>
-          <button
-            onClick={() => onNavigate('control')}
-            className="bg-black border border-zinc-800 rounded-lg p-4 text-left hover:border-zinc-600 transition-colors"
-          >
-            <PlayCircle className="w-6 h-6 text-gray-400 mb-2" />
-            <p className="text-white font-medium">Start Round</p>
-            <p className="text-xs text-gray-400 mt-1">Begin contest round</p>
-          </button>
+      {/* Quick Actions and Live Alerts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Quick Actions */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+          <h3 className="text-lg font-semibold text-white mb-4">Quick Actions</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button
+              onClick={() => onNavigate('questions')}
+              className="bg-black border border-zinc-800 rounded-lg p-4 text-left hover:border-zinc-600 transition-colors"
+            >
+              <FileQuestion className="w-6 h-6 text-gray-400 mb-2" />
+              <p className="text-white font-medium">Add Question</p>
+              <p className="text-xs text-gray-400 mt-1">Create new DSA problem</p>
+            </button>
+            <button
+              onClick={() => onNavigate('rounds')}
+              className="bg-black border border-zinc-800 rounded-lg p-4 text-left hover:border-zinc-600 transition-colors"
+            >
+              <Layers className="w-6 h-6 text-gray-400 mb-2" />
+              <p className="text-white font-medium">Create Round</p>
+              <p className="text-xs text-gray-400 mt-1">Setup new contest round</p>
+            </button>
+            <button
+              onClick={() => onNavigate('teams')}
+              className="bg-black border border-zinc-800 rounded-lg p-4 text-left hover:border-zinc-600 transition-colors"
+            >
+              <Users className="w-6 h-6 text-gray-400 mb-2" />
+              <p className="text-white font-medium">Review Teams</p>
+              <p className="text-xs text-gray-400 mt-1">Approve pending teams</p>
+            </button>
+            <button
+              onClick={() => onNavigate('control')}
+              className="bg-black border border-zinc-800 rounded-lg p-4 text-left hover:border-zinc-600 transition-colors"
+            >
+              <PlayCircle className="w-6 h-6 text-gray-400 mb-2" />
+              <p className="text-white font-medium">Start Round</p>
+              <p className="text-xs text-gray-400 mt-1">Begin contest round</p>
+            </button>
+          </div>
         </div>
+
+        {/* Live Cheating Alerts */}
+        <CheatingAlertsList />
       </div>
 
       {/* Recent Activity */}

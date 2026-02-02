@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Zap, Shield as ShieldIcon, Target, AlertTriangle, Coins, ShoppingCart } from 'lucide-react';
 
 interface TacticalPanelProps {
@@ -10,6 +10,9 @@ interface TacticalPanelProps {
   onActivateShield: () => void;
   onPurchaseToken: (type: 'sabotage' | 'shield', cost: number) => void;
   targets: TeamTarget[];
+  sabotageCooldown: number | null;
+  shieldCooldown: number | null;
+  message: { text: string; type: 'success' | 'error' } | null;
 }
 
 interface TeamTarget {
@@ -28,35 +31,46 @@ export function TacticalPanel({
   onActivateShield,
   onPurchaseToken,
   targets,
+  sabotageCooldown,
+  shieldCooldown,
+  message,
 }: TacticalPanelProps) {
-  const [showModal, setShowModal] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'sabotage' | 'shield' | 'store'>('sabotage');
   const [selectedTarget, setSelectedTarget] = useState<TeamTarget | null>(null);
+  const [selectedSabotage, setSelectedSabotage] = useState<string | null>(null);
+  const [sabotageTimer, setSabotageTimer] = useState<number>(0);
+  const [shieldTimer, setShieldTimer] = useState<number>(0);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (sabotageCooldown) {
+        const remaining = Math.max(0, Math.ceil((sabotageCooldown - Date.now()) / 1000));
+        setSabotageTimer(remaining);
+      } else {
+        setSabotageTimer(0);
+      }
+      if (shieldCooldown) {
+        const remaining = Math.max(0, Math.ceil((shieldCooldown - Date.now()) / 1000));
+        setShieldTimer(remaining);
+      } else {
+        setShieldTimer(0);
+      }
+    }, 1000);
 
+    return () => clearInterval(interval);
+  }, [sabotageCooldown, shieldCooldown]);
 
   const sabotageTypes = [
     { id: 'blackout', name: 'Screen Blackout', duration: '3 min' },
     { id: 'typing-delay', name: '2s Typing Delay', duration: '3 min' },
   ];
 
-  const handleSabotage = (type: string) => {
-    if (selectedTarget) {
-      if (selectedTarget.hasShield) {
-        alert(`${selectedTarget.name} blocked your attack with a shield!`);
-        setShowModal(false);
-        setSelectedTarget(null);
-        return;
-      }
-      onUseSabotage(selectedTarget.name, type);
-      setShowModal(false);
-      setSelectedTarget(null);
-    }
-  };
 
   return (
     <>
       <button
-        onClick={() => setShowModal(true)}
+        onClick={() => setIsOpen(true)}
         className="bg-red-500/10 border border-red-500/30 text-red-500 px-4 py-2 rounded-lg font-medium hover:bg-red-500/20 transition-colors flex items-center gap-2"
       >
         <Zap className="w-4 h-4" />
@@ -64,7 +78,7 @@ export function TacticalPanel({
       </button>
 
       {/* Tactical Modal */}
-      {showModal && (
+      {isOpen && (
         <div className="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
             {/* Header */}
@@ -80,8 +94,9 @@ export function TacticalPanel({
               </div>
               <button
                 onClick={() => {
-                  setShowModal(false);
+                  setIsOpen(false);
                   setSelectedTarget(null);
+                  setSelectedSabotage(null);
                 }}
                 className="text-gray-400 hover:text-white transition-colors"
               >
@@ -177,13 +192,13 @@ export function TacticalPanel({
                 </div>
                 <button
                   onClick={onActivateShield}
-                  disabled={shieldTokens === 0 || isShieldActive}
-                  className={`w-full py-3 rounded-lg font-medium transition-colors ${shieldTokens > 0 && !isShieldActive
+                  disabled={shieldTokens === 0 || isShieldActive || shieldTimer > 0}
+                  className={`w-full py-3 rounded-lg font-medium transition-colors ${shieldTokens > 0 && !isShieldActive && shieldTimer === 0
                     ? 'bg-blue-500 text-white hover:bg-blue-600'
                     : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
                     }`}
                 >
-                  {isShieldActive ? 'Shield Active' : 'Activate Shield (1 min)'}
+                  {isShieldActive ? 'Shield Active' : shieldTimer > 0 ? `On Cooldown (${shieldTimer}s)` : 'Activate Shield (10 min)'}
                 </button>
               </div>
 
@@ -228,9 +243,6 @@ export function TacticalPanel({
                                 <p className="text-white font-medium text-sm">{team.name}</p>
                                 <p className="text-xs text-gray-400">Rank #{team.rank}</p>
                               </div>
-                              {team.hasShield && (
-                                <ShieldIcon className="w-4 h-4 text-blue-500" />
-                              )}
                             </div>
                           </button>
                         ))}
@@ -248,8 +260,11 @@ export function TacticalPanel({
                           {sabotageTypes.map((sabotage) => (
                             <button
                               key={sabotage.id}
-                              onClick={() => handleSabotage(sabotage.id)}
-                              className="p-3 bg-zinc-900 border border-zinc-700 rounded-lg hover:border-red-500 transition-all text-left"
+                              onClick={() => setSelectedSabotage(sabotage.id)}
+                              className={`p-3 border rounded-lg transition-all text-left ${selectedSabotage === sabotage.id
+                                  ? 'bg-red-500/10 border-red-500'
+                                  : 'bg-zinc-900 border-zinc-700 hover:border-zinc-600'
+                                }`}
                             >
                               <p className="text-white font-medium text-sm">{sabotage.name}</p>
                               <p className="text-xs text-gray-400">{sabotage.duration}</p>
@@ -258,6 +273,33 @@ export function TacticalPanel({
                         </div>
                       </div>
                     )}
+                    {/* Global Launch Button */}
+                    <div className="mt-6 border-t border-zinc-800 pt-6">
+                      <button
+                        onClick={() => {
+                          if (selectedTarget && selectedSabotage) {
+                            onUseSabotage(selectedTarget.id, selectedSabotage);
+                            setIsOpen(false);
+                            setSelectedTarget(null);
+                            setSelectedSabotage(null);
+                          }
+                        }}
+                        disabled={!selectedTarget || !selectedSabotage || sabotageTokens === 0 || sabotageTimer > 0}
+                        className={`w-full py-4 rounded-xl font-bold transition-all ${selectedTarget && selectedSabotage && sabotageTokens > 0 && sabotageTimer === 0
+                            ? 'bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20'
+                            : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
+                          }`}
+                      >
+                        {sabotageTimer > 0
+                          ? `On Cooldown (${sabotageTimer}s)`
+                          : !selectedTarget
+                            ? 'Select Target Team'
+                            : !selectedSabotage
+                              ? 'Select Attack Type'
+                              : 'Launch Sabotage'
+                        }
+                      </button>
+                    </div>
                   </>
                 ) : (
                   <div className="text-center py-8">

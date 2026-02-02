@@ -44,9 +44,9 @@ io.on('connection', async (socket) => {
     }
 
     // Handle cheating violations reported by clients
-    socket.on('cheating:violation', ({ teamName, roundName, violationType }) => {
-        console.log(`Violation reported: ${teamName} - ${violationType} in ${roundName}`);
-        broadcastCheatingViolation(teamName, roundName, violationType);
+    socket.on('cheating:violation', ({ teamName, roundName, violationType, action, duration }) => {
+        console.log(`Violation reported: ${teamName} - ${violationType} (${action}${duration ? `, ${duration}s` : ''}) in ${roundName}`);
+        broadcastCheatingViolation(teamName, roundName, violationType, action, duration);
     });
 
     socket.on('disconnect', () => {
@@ -58,8 +58,23 @@ io.on('connection', async (socket) => {
 connectDB();
 
 // Middleware
+const allowedOrigins = [
+    process.env.CLIENT_URL || 'http://localhost:3000',
+    'http://localhost:5173',
+    'https://uninfectiously-rancid-tianna.ngrok-free.dev'
+];
+
 app.use(cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: function (origin, callback) {
+        // allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            var msg = 'The CORS policy for this site does not ' +
+                'allow access from the specified Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
     credentials: true,
 }));
 app.use(express.json());

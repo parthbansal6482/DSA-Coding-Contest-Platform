@@ -21,7 +21,7 @@ interface Question {
 }
 
 interface SabotageEffect {
-  type: 'blackout' | 'typing-delay';
+  type: 'blackout' | 'typing-delay' | 'format-chaos' | 'ui-glitch';
   endTime: number;
   fromTeam?: string;
 }
@@ -42,6 +42,8 @@ interface TestResult {
   expectedOutput: string;
   actualOutput?: string;
   error?: string;
+  executionTime?: number;
+  memoryUsed?: number;
 }
 
 // Default fallback boilerplate
@@ -121,7 +123,7 @@ export function CodeEditor({ roundId, question, activeEffects, isShieldActive, o
 
       if (response.success) {
         // Map results to TestResult format
-        const results: TestResult[] = response.data.results.map((result) => ({
+        const results: TestResult[] = response.data.results.map((result: any) => ({
           passed: result.passed,
           input: result.input,
           expectedOutput: result.expectedOutput,

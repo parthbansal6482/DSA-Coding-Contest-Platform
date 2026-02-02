@@ -2,6 +2,7 @@ import { CheckCircle, Circle, AlertCircle } from 'lucide-react';
 
 interface Question {
   _id: string;
+  id: string;
   title: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   points: number;
@@ -59,8 +60,8 @@ export function QuestionList({ questions, selectedQuestionId, onSelectQuestion }
               key={question._id}
               onClick={() => onSelectQuestion(question._id)}
               className={`w-full text-left p-4 rounded-lg transition-all ${selectedQuestionId === question._id
-                  ? 'bg-white/5 border border-zinc-700'
-                  : 'border border-transparent hover:bg-zinc-800'
+                ? 'bg-white/5 border border-zinc-700'
+                : 'border border-transparent hover:bg-zinc-800'
                 }`}
             >
               <div className="flex items-start gap-3">

@@ -232,7 +232,7 @@ export function QuestionsSection() {
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-white mb-2">{question.title}</h3>
                   <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 rounded text-xs font-medium ${difficultyColors[question.difficulty]}`}>
+                    <span className={`px-2 py-1 rounded text-xs font-medium ${difficultyColors[question.difficulty as keyof typeof difficultyColors]}`}>
                       {question.difficulty}
                     </span>
                     <span className="text-gray-400 text-sm">{question.category}</span>
@@ -446,8 +446,8 @@ export function QuestionsSection() {
                           type="button"
                           onClick={() => setActiveBoilerplateTab(lang)}
                           className={`px-4 py-2 text-sm font-medium transition-colors ${activeBoilerplateTab === lang
-                              ? 'bg-zinc-900 text-white border-b-2 border-white'
-                              : 'text-gray-400 hover:text-white'
+                            ? 'bg-zinc-900 text-white border-b-2 border-white'
+                            : 'text-gray-400 hover:text-white'
                             }`}
                         >
                           {lang === 'cpp' ? 'C++' : lang.charAt(0).toUpperCase() + lang.slice(1)}

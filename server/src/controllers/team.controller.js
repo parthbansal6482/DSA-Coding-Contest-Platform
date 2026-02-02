@@ -1,5 +1,6 @@
 const Team = require('../models/Team');
 const { generateToken } = require('../utils/jwt');
+const { broadcastSabotageAttack } = require('../socket');
 
 // @desc    Register team
 // @route   POST /api/team/register
@@ -251,6 +252,7 @@ exports.getLeaderboard = async (req, res) => {
 
         // Format leaderboard data with ranks
         const leaderboard = teams.map((team, index) => ({
+            _id: team._id,
             rank: index + 1,
             teamName: team.teamName,
             points: team.points || 0,
@@ -404,7 +406,7 @@ exports.activateShield = async (req, res) => {
         team.shieldTokens -= 1;
         team.shieldActive = true;
         team.shieldExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-        team.shieldCooldownUntil = null; // Clear cooldown
+        team.shieldCooldownUntil = new Date(Date.now() + 15 * 60 * 1000); // 5 minutes after expiration (15 mins total)
 
         await team.save();
 
@@ -414,6 +416,7 @@ exports.activateShield = async (req, res) => {
             data: {
                 shieldActive: team.shieldActive,
                 shieldExpiresAt: team.shieldExpiresAt,
+                shieldCooldownUntil: team.shieldCooldownUntil,
                 shieldTokens: team.shieldTokens,
             },
         });
@@ -494,8 +497,8 @@ exports.launchSabotage = async (req, res) => {
 
         await team.save();
 
-        // Note: Actual sabotage effects would be implemented via WebSocket
-        // For now, we just track the token usage and cooldown
+        // Broadcast sabotage effect via WebSocket
+        await broadcastSabotageAttack(targetTeamId, team.teamName, sabotageType);
 
         res.status(200).json({
             success: true,

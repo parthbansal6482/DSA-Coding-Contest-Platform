@@ -20,6 +20,7 @@ const getLeaderboardData = async () => {
             .select('teamName points members sabotageTokens shieldTokens');
 
         return teams.map((team, index) => ({
+            _id: team._id,
             rank: index + 1,
             teamName: team.teamName,
             points: team.points || 0,
@@ -135,16 +136,20 @@ const broadcastSubmissionUpdate = async (teamId, submission) => {
  * @param {string} teamName - The name of the team that violated rules
  * @param {string} roundName - The round name
  * @param {string} violationType - The type of violation (e.g., 'tab-switch')
+ * @param {string} action - 'start' or 'end'
+ * @param {number} duration - The duration in seconds
  */
-const broadcastCheatingViolation = (teamName, roundName, violationType) => {
+const broadcastCheatingViolation = (teamName, roundName, violationType, action, duration) => {
     if (!io) return;
     io.emit('cheating:alert', {
         teamName,
         roundName,
         violationType,
+        action,
+        duration,
         timestamp: new Date(),
     });
-    console.log(`Cheating alert broadcasted for team: ${teamName}`);
+    console.log(`Cheating alert broadcasted for team: ${teamName} (${action}${duration ? `, ${duration}s` : ''})`);
 };
 
 /**
@@ -171,10 +176,36 @@ const broadcastDisqualificationUpdate = async (teamId, isDisqualified, roundId) 
     }
 };
 
+/**
+ * Broadcast sabotage attack to a specific team
+ * @param {string} targetTeamId - The team ID being sabotaged
+ * @param {string} attackerTeamName - The name of the team launching the attack
+ * @param {string} sabotageType - The type of sabotage
+ */
+const broadcastSabotageAttack = async (targetTeamId, attackerTeamName, sabotageType) => {
+    if (!io) return;
+
+    try {
+        const targetTeam = await Team.findById(targetTeamId).select('teamName');
+        if (!targetTeam) return;
+
+        io.emit('team:sabotage', {
+            targetTeamName: targetTeam.teamName,
+            attackerTeamName,
+            type: sabotageType,
+            timestamp: new Date(),
+        });
+        console.log(`Sabotage attack broadcasted: ${sabotageType} from ${attackerTeamName} to ${targetTeam.teamName}`);
+    } catch (error) {
+        console.error('Error broadcasting sabotage attack:', error);
+    }
+};
+
 module.exports = {
     initializeSocket,
     broadcastSubmissionUpdate,
     broadcastCheatingViolation,
     broadcastDisqualificationUpdate,
+    broadcastSabotageAttack,
     getLeaderboardData,
 };

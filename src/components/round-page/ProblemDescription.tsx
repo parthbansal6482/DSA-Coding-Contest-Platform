@@ -1,5 +1,6 @@
 interface Question {
   _id: string;
+  id: string;
   title: string;
   difficulty: 'Easy' | 'Medium' | 'Hard';
   points: number;

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { AlertTriangle, Shield as ShieldIcon, X } from 'lucide-react';
 
 interface SabotageEffect {
-  type: 'blackout' | 'typing-delay';
+  type: 'blackout' | 'typing-delay' | 'format-chaos' | 'ui-glitch';
   endTime: number;
   fromTeam?: string;
 }
