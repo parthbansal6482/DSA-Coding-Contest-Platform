@@ -373,7 +373,7 @@ const submitSolution = async (req, res) => {
             testResults: result.results,
         });
 
-        // If accepted, update team points
+        // If accepted, update team points and score
         if (status === 'accepted') {
             // Check if this is the first accepted submission for this question
             const previousAccepted = await Submission.findOne({
@@ -384,8 +384,40 @@ const submitSolution = async (req, res) => {
             });
 
             if (!previousAccepted) {
+                // Calculate time-based points (currency)
+                const startTime = new Date(round.startTime).getTime();
+                const now = Date.now();
+                const totalDurationMs = round.duration * 60 * 1000;
+                const elapsedMs = now - startTime;
+
+                // Points = QuestionPoints * (percentage of time remaining)
+                // Minimum 20% of base points awarded even if solved late
+                const timeRemainingRatio = Math.max(0.2, 1 - (elapsedMs / totalDurationMs));
+                const currencyPoints = Math.floor((question.points || 100) * timeRemainingRatio);
+
+                // Score = QuestionPoints (fixed for leaderboard)
+                const scoreReward = question.points || 100;
+
                 await Team.findByIdAndUpdate(teamId, {
-                    $inc: { points },
+                    $inc: {
+                        points: currencyPoints,
+                        score: scoreReward
+                    },
+                });
+
+                console.log(`Team awarded ${scoreReward} score and ${currencyPoints} currency points for solving ${question.title}`);
+
+                // Real-time broadcasts
+                const { broadcastLeaderboardUpdate, broadcastTeamStatsUpdate, broadcastSubmissionUpdate } = require('../socket');
+                broadcastLeaderboardUpdate();
+                broadcastTeamStatsUpdate(teamId);
+
+                // Also broadcast submission for current team's round view
+                broadcastSubmissionUpdate(teamId, {
+                    question: questionId,
+                    status,
+                    points: currencyPoints,
+                    submittedAt: submission.submittedAt,
                 });
             }
         }
@@ -708,6 +740,10 @@ const updateRound = async (req, res) => {
             }
         ).populate('questions', 'title difficulty category');
 
+        // Broadcast round update
+        const { broadcastRoundUpdate } = require('../socket');
+        broadcastRoundUpdate(round);
+
         res.status(200).json({
             success: true,
             data: round,
@@ -787,11 +823,26 @@ const updateRoundStatus = async (req, res) => {
             });
         }
 
+        const existingRound = await Round.findById(req.params.id);
+        if (!existingRound) {
+            return res.status(404).json({
+                success: false,
+                message: 'Round not found',
+            });
+        }
+
         const updateData = { status };
 
-        // Set start time when status changes to active
+        // Set start time and calculate end time when status changes to active
         if (status === 'active') {
-            updateData.startTime = new Date();
+            const startTime = new Date();
+            updateData.startTime = startTime;
+
+            // Calculate endTime based on duration
+            if (existingRound.duration) {
+                const durationMs = existingRound.duration * 60 * 1000;
+                updateData.endTime = new Date(startTime.getTime() + durationMs);
+            }
         }
 
         // Set end time when status changes to completed
@@ -811,6 +862,10 @@ const updateRoundStatus = async (req, res) => {
                 message: 'Round not found',
             });
         }
+
+        // Broadcast round update
+        const { broadcastRoundUpdate } = require('../socket');
+        broadcastRoundUpdate(round);
 
         res.status(200).json({
             success: true,

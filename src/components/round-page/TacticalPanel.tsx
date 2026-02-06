@@ -62,8 +62,10 @@ export function TacticalPanel({
   }, [sabotageCooldown, shieldCooldown]);
 
   const sabotageTypes = [
-    { id: 'blackout', name: 'Screen Blackout', duration: '3 min' },
-    { id: 'typing-delay', name: '2s Typing Delay', duration: '3 min' },
+    { id: 'blackout', name: 'Screen Blackout', duration: '60s' },
+    { id: 'typing-delay', name: 'Typing Delay', duration: '60s' },
+    { id: 'format-chaos', name: 'Format Chaos', duration: '60s' },
+    { id: 'ui-glitch', name: 'UI Glitch', duration: '60s' },
   ];
 
 
@@ -135,14 +137,14 @@ export function TacticalPanel({
                     </div>
                     <p className="text-sm text-gray-400 mb-3">Disrupt opponent teams</p>
                     <button
-                      onClick={() => onPurchaseToken('sabotage', 50)}
-                      disabled={currentPoints < 50}
-                      className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${currentPoints >= 50
+                      onClick={() => onPurchaseToken('sabotage', 250)}
+                      disabled={currentPoints < 250}
+                      className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${currentPoints >= 250
                         ? 'bg-red-500 text-white hover:bg-red-600'
                         : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
                         }`}
                     >
-                      Buy for 50 pts
+                      Buy for 250 pts
                     </button>
                   </div>
                   {/* Shield Token */}
@@ -153,14 +155,14 @@ export function TacticalPanel({
                     </div>
                     <p className="text-sm text-gray-400 mb-3">Block incoming attacks</p>
                     <button
-                      onClick={() => onPurchaseToken('shield', 75)}
-                      disabled={currentPoints < 75}
-                      className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${currentPoints >= 75
+                      onClick={() => onPurchaseToken('shield', 200)}
+                      disabled={currentPoints < 200}
+                      className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${currentPoints >= 200
                         ? 'bg-blue-500 text-white hover:bg-blue-600'
                         : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
                         }`}
                     >
-                      Buy for 75 pts
+                      Buy for 200 pts
                     </button>
                   </div>
                 </div>
@@ -262,8 +264,8 @@ export function TacticalPanel({
                               key={sabotage.id}
                               onClick={() => setSelectedSabotage(sabotage.id)}
                               className={`p-3 border rounded-lg transition-all text-left ${selectedSabotage === sabotage.id
-                                  ? 'bg-red-500/10 border-red-500'
-                                  : 'bg-zinc-900 border-zinc-700 hover:border-zinc-600'
+                                ? 'bg-red-500/10 border-red-500'
+                                : 'bg-zinc-900 border-zinc-700 hover:border-zinc-600'
                                 }`}
                             >
                               <p className="text-white font-medium text-sm">{sabotage.name}</p>
@@ -286,8 +288,8 @@ export function TacticalPanel({
                         }}
                         disabled={!selectedTarget || !selectedSabotage || sabotageTokens === 0 || sabotageTimer > 0}
                         className={`w-full py-4 rounded-xl font-bold transition-all ${selectedTarget && selectedSabotage && sabotageTokens > 0 && sabotageTimer === 0
-                            ? 'bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20'
-                            : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
+                          ? 'bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20'
+                          : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
                           }`}
                       >
                         {sabotageTimer > 0

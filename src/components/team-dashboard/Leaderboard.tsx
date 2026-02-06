@@ -85,7 +85,7 @@ export function Leaderboard({ currentTeam }: { currentTeam: string }) {
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold text-white">Leaderboard</h2>
-        <p className="text-gray-400 mt-1">Live rankings • Updates every 30 seconds</p>
+        <p className="text-gray-400 mt-1">Live rankings • Real-time updates</p>
       </div>
 
       {/* Top 3 Podium */}
@@ -107,8 +107,8 @@ export function Leaderboard({ currentTeam }: { currentTeam: string }) {
                   {getRankIcon(team.rank)}
                 </div>
                 <h3 className="text-lg font-bold text-white mb-1">{team.teamName}</h3>
-                <p className="text-3xl font-bold text-white mb-2">{team.points}</p>
-                <p className="text-sm text-gray-400">points</p>
+                <p className="text-3xl font-bold text-white mb-2">{team.score}</p>
+                <p className="text-sm text-gray-400">score</p>
                 <div className="mt-3 text-xs text-gray-500">
                   {team.memberCount} members
                 </div>
@@ -126,6 +126,7 @@ export function Leaderboard({ currentTeam }: { currentTeam: string }) {
               <tr>
                 <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Rank</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Team</th>
+                <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Score</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Points</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Members</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Tokens</th>
@@ -165,7 +166,10 @@ export function Leaderboard({ currentTeam }: { currentTeam: string }) {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-white font-bold">{team.points}</span>
+                    <span className="text-white font-bold">{team.score}</span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="text-gray-400">{team.points}</span>
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-gray-400">{team.memberCount} members</span>
@@ -192,9 +196,9 @@ export function Leaderboard({ currentTeam }: { currentTeam: string }) {
           </p>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-          <p className="text-gray-400 text-sm mb-1">Points Gap (to #1)</p>
+          <p className="text-gray-400 text-sm mb-1">Score Gap (to #1)</p>
           <p className="text-2xl font-bold text-white">
-            {currentTeamData ? topTeam.points - currentTeamData.points : '-'}
+            {currentTeamData ? topTeam.score - currentTeamData.score : '-'}
           </p>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">

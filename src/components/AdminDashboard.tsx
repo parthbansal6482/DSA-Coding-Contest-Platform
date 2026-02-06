@@ -14,12 +14,17 @@ import { RoundsSection } from './dashboard/RoundsSection';
 import { TeamsSection } from './dashboard/TeamsSection';
 import { RoundControlSection } from './dashboard/RoundControlSection';
 import { CheatingAlertsList } from './dashboard/CheatingAlertsList';
+import { socketService } from '../services/socket.service';
 
 type Section = 'overview' | 'questions' | 'rounds' | 'teams' | 'control';
 
 export function AdminDashboard() {
   const [activeSection, setActiveSection] = useState<Section>('overview');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  useEffect(() => {
+    socketService.connect();
+  }, []);
 
   const handleLogout = () => {
     // Clear the token from localStorage

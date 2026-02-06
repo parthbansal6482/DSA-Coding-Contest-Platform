@@ -371,7 +371,7 @@ export function QuestionsSection() {
                   <label className="block text-sm text-gray-300 mb-2">Test Cases Count</label>
                   <input
                     type="number"
-                    value={formData.testCases}
+                    value={formData.testCases !== undefined && isNaN(formData.testCases) ? '' : formData.testCases}
                     onChange={(e) => setFormData({ ...formData, testCases: parseInt(e.target.value) })}
                     className="w-full bg-black border border-zinc-800 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-zinc-600"
                     min="1"

@@ -1,5 +1,5 @@
 const Team = require('../models/Team');
-const { broadcastDisqualificationUpdate } = require('../socket');
+const { broadcastDisqualificationUpdate, broadcastLeaderboardUpdate } = require('../socket');
 
 // @desc    Get all teams (with optional status filter)
 // @route   GET /api/teams?status=pending
@@ -53,6 +53,9 @@ exports.approveTeam = async (req, res) => {
         team.approvedAt = Date.now();
         await team.save();
 
+        // Broadcast leaderboard update since a new team is now approved
+        broadcastLeaderboardUpdate();
+
         res.status(200).json({
             success: true,
             message: 'Team approved successfully',
@@ -96,6 +99,9 @@ exports.rejectTeam = async (req, res) => {
 
         team.status = 'rejected';
         await team.save();
+
+        // Broadcast leaderboard update since a team might have been removed
+        broadcastLeaderboardUpdate();
 
         res.status(200).json({
             success: true,

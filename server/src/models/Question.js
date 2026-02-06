@@ -31,6 +31,10 @@ const questionSchema = new mongoose.Schema({
         required: [true, 'Category is required'],
         trim: true,
     },
+    points: {
+        type: Number,
+        default: 100,
+    },
     description: {
         type: String,
         required: [true, 'Description is required'],
@@ -93,7 +97,14 @@ const questionSchema = new mongoose.Schema({
     timestamps: true,
 });
 
-// Index for faster searches
-questionSchema.index({ title: 1, category: 1, difficulty: 1 });
+// Pre-save hook to set points based on difficulty if not provided
+questionSchema.pre('save', function (next) {
+    if (!this.points || this.points === 100) {
+        if (this.difficulty === 'Easy') this.points = 100;
+        else if (this.difficulty === 'Medium') this.points = 150;
+        else if (this.difficulty === 'Hard') this.points = 200;
+    }
+    next();
+});
 
 module.exports = mongoose.model('Question', questionSchema);

@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Search, Check, X, Eye, Users as UsersIcon, Mail } from 'lucide-react';
 import { getAllTeams, approveTeam, rejectTeam } from '../../services/team.service';
+import { socketService } from '../../services/socket.service';
+import { LeaderboardTeam } from '../../services/team.service';
 
 interface Member {
   name: string;
@@ -14,6 +16,8 @@ interface Team {
   members: Member[];
   status: 'pending' | 'approved' | 'rejected';
   registrationDate: string;
+  points?: number;
+  score?: number;
 }
 
 export function TeamsSection() {
@@ -29,6 +33,29 @@ export function TeamsSection() {
   // Fetch teams on component mount and when filter changes
   useEffect(() => {
     fetchTeams();
+
+    // Subscribe to real-time updates
+    socketService.connect();
+
+    const unsubscribe = socketService.onLeaderboardUpdate((data: LeaderboardTeam[]) => {
+      setTeams((prevTeams) => {
+        return prevTeams.map(team => {
+          const updatedTeam = data.find(t => t._id === team._id);
+          if (updatedTeam) {
+            return {
+              ...team,
+              points: updatedTeam.points,
+              score: updatedTeam.score
+            };
+          }
+          return team;
+        });
+      });
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, [filterStatus]);
 
   const fetchTeams = async () => {
@@ -169,6 +196,17 @@ export function TeamsSection() {
               </div>
 
               <div className="flex items-center gap-2 ml-4">
+                <div className="flex flex-col items-end gap-2 pr-4 text-right">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 uppercase font-bold">Score</span>
+                    <span className="text-lg font-bold text-white">{team.score || 0}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 uppercase font-bold">Points</span>
+                    <span className="text-sm font-medium text-yellow-500">{team.points || 0}</span>
+                  </div>
+                </div>
+
                 <button
                   onClick={() => setSelectedTeam(team)}
                   className="p-2 bg-zinc-800 rounded-lg text-gray-400 hover:text-white hover:bg-zinc-700 transition-colors"

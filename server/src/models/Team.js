@@ -54,6 +54,10 @@ const teamSchema = new mongoose.Schema(
             type: Number,
             default: 0,
         },
+        score: {
+            type: Number,
+            default: 0,
+        },
         sabotageTokens: {
             type: Number,
             default: 0,
@@ -92,6 +96,15 @@ const teamSchema = new mongoose.Schema(
         disqualifiedRounds: [{
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Round',
+        }],
+        activeSabotages: [{
+            type: {
+                type: String,
+                enum: ['blackout', 'typing-delay', 'format-chaos', 'ui-glitch'],
+            },
+            startTime: Date,
+            endTime: Date,
+            fromTeamName: String,
         }],
     },
     {

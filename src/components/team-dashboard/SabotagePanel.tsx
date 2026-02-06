@@ -60,7 +60,7 @@ export function SabotagePanel({ currentTokens, leaderboardTeams, onActivateShiel
     {
       type: 'blackout',
       name: 'Screen Blackout',
-      duration: 30,
+      duration: 60,
     },
     {
       type: 'typing-delay',
@@ -70,12 +70,12 @@ export function SabotagePanel({ currentTokens, leaderboardTeams, onActivateShiel
     {
       type: 'format-chaos',
       name: 'Format Chaos',
-      duration: 45,
+      duration: 60,
     },
     {
       type: 'ui-glitch',
       name: 'UI Glitch',
-      duration: 30,
+      duration: 60,
     },
   ];
 
@@ -167,8 +167,8 @@ export function SabotagePanel({ currentTokens, leaderboardTeams, onActivateShiel
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className={`p-3 rounded-xl border ${isShieldActive
-                  ? 'bg-blue-500/20 border-blue-500'
-                  : 'bg-blue-500/10 border-blue-500/30'
+                ? 'bg-blue-500/20 border-blue-500'
+                : 'bg-blue-500/10 border-blue-500/30'
                 }`}>
                 <ShieldIcon className="w-6 h-6 text-blue-500" />
               </div>
@@ -217,8 +217,8 @@ export function SabotagePanel({ currentTokens, leaderboardTeams, onActivateShiel
             onClick={handleActivateShield}
             disabled={currentTokens.shield === 0 || isShieldActive || shieldCooldown > 0}
             className={`w-full py-3 rounded-lg font-medium transition-colors ${currentTokens.shield > 0 && !isShieldActive && shieldCooldown === 0
-                ? 'bg-blue-500 text-white hover:bg-blue-600'
-                : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
+              ? 'bg-blue-500 text-white hover:bg-blue-600'
+              : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
               }`}
           >
             {isShieldActive ? 'Shield Active' : shieldCooldown > 0 ? 'On Cooldown' : 'Activate Shield'}
@@ -258,8 +258,8 @@ export function SabotagePanel({ currentTokens, leaderboardTeams, onActivateShiel
             onClick={() => setShowSabotageModal(true)}
             disabled={currentTokens.sabotage === 0 || sabotageCooldown > 0}
             className={`w-full py-3 rounded-lg font-medium transition-colors ${currentTokens.sabotage > 0 && sabotageCooldown === 0
-                ? 'bg-red-500 text-white hover:bg-red-600'
-                : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
+              ? 'bg-red-500 text-white hover:bg-red-600'
+              : 'bg-zinc-800 text-gray-600 cursor-not-allowed'
               }`}
           >
             {sabotageCooldown > 0 ? 'On Cooldown' : 'Launch Sabotage'}
@@ -331,8 +331,8 @@ export function SabotagePanel({ currentTokens, leaderboardTeams, onActivateShiel
                       key={team.id}
                       onClick={() => setSelectedTarget(team)}
                       className={`p-4 rounded-lg border transition-all text-left ${selectedTarget?.id === team.id
-                          ? 'bg-red-500/10 border-red-500'
-                          : 'bg-black border-zinc-800 hover:border-zinc-600'
+                        ? 'bg-red-500/10 border-red-500'
+                        : 'bg-black border-zinc-800 hover:border-zinc-600'
                         }`}
                     >
                       <div className="flex items-start justify-between">

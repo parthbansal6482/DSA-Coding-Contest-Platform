@@ -66,7 +66,7 @@ exports.submitCode = async (req, res) => {
         });
 
         // Run code asynchronously
-        runCodeAsync(submission._id, code, language, question);
+        runCodeAsync(submission._id, code, language, question, round);
 
         res.status(201).json({
             success: true,
@@ -89,7 +89,7 @@ exports.submitCode = async (req, res) => {
 /**
  * Run code asynchronously and update submission
  */
-async function runCodeAsync(submissionId, code, language, question) {
+async function runCodeAsync(submissionId, code, language, question, round) {
     try {
         // Prepare test cases
         const testCases = question.examples.map(example => ({
@@ -146,7 +146,7 @@ async function runCodeAsync(submissionId, code, language, question) {
         const submission = await Submission.findById(submissionId);
         const teamId = submission.team;
 
-        // If accepted, update team points
+        // If accepted, update team points and score
         if (status === 'accepted') {
             // Check if this is the first accepted submission for this question
             const previousAccepted = await Submission.findOne({
@@ -157,9 +157,36 @@ async function runCodeAsync(submissionId, code, language, question) {
             });
 
             if (!previousAccepted) {
+                // Refetch round to get most up-to-date startTime and duration
+                const freshRound = await Round.findById(round._id);
+                const startTime = freshRound?.startTime ? new Date(freshRound.startTime).getTime() : (round.startTime ? new Date(round.startTime).getTime() : Date.now());
+                const now = Date.now();
+                const totalDurationMs = (freshRound?.duration || round.duration || 60) * 60 * 1000;
+                const elapsedMs = Math.max(0, now - startTime);
+
+                console.log(`Debug Scoring: now=${now}, startTime=${startTime}, duration=${freshRound?.duration || round.duration}, totalDurationMs=${totalDurationMs}, elapsedMs=${elapsedMs}`);
+
+                let timeRemainingRatio = 1 - (elapsedMs / totalDurationMs);
+                timeRemainingRatio = Math.max(0.2, Math.min(1, timeRemainingRatio));
+
+                if (isNaN(timeRemainingRatio)) timeRemainingRatio = 0.5;
+
+                const basePoints = question.points || 100;
+                const currencyPoints = Math.floor(basePoints * timeRemainingRatio);
+
+                // Score = Also time-based for leaderboard
+                const scoreReward = Math.floor(basePoints * timeRemainingRatio);
+
+                console.log(`Scoring: timeRatio=${timeRemainingRatio.toFixed(2)}, points=${currencyPoints}, score=${scoreReward}`);
+
                 await Team.findByIdAndUpdate(teamId, {
-                    $inc: { points },
+                    $inc: {
+                        points: currencyPoints || 0,
+                        score: scoreReward || 0
+                    },
                 });
+
+                console.log(`Team awarded ${scoreReward} score and ${currencyPoints} currency points for solving ${question.title}`);
 
                 // Broadcast leaderboard update
                 broadcastLeaderboardUpdate();
@@ -314,7 +341,7 @@ exports.getLeaderboard = async (req, res) => {
             }
         });
 
-        // Convert to array and sort
+        // Convert to array and sort by totalScore
         const leaderboard = Object.values(teamScores)
             .sort((a, b) => {
                 if (b.totalPoints !== a.totalPoints) {

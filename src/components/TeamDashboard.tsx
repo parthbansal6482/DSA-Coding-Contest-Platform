@@ -47,8 +47,14 @@ export function TeamDashboard({ onEnterRound }: TeamDashboardProps) {
         setTeamData((prev) => prev ? {
           ...prev,
           points: data.points,
+          score: data.score,
           rank: data.rank,
           tokens: data.tokens,
+          sabotageCooldownUntil: data.sabotageCooldownUntil,
+          shieldCooldownUntil: data.shieldCooldownUntil,
+          shieldActive: data.shieldActive,
+          shieldExpiresAt: data.shieldExpiresAt,
+          activeSabotages: data.activeSabotages,
         } : null);
       }
     });
@@ -68,10 +74,17 @@ export function TeamDashboard({ onEnterRound }: TeamDashboardProps) {
       }
     });
 
+    // Subscribe to leaderboard updates
+    const unsubscribeLeaderboard = socketService.onLeaderboardUpdate((data: LeaderboardTeam[]) => {
+      console.log('Real-time leaderboard update received in TeamDashboard');
+      setLeaderboardData(data);
+    });
+
     // Cleanup on unmount
     return () => {
       unsubscribeStats();
       unsubscribeDisqualification();
+      unsubscribeLeaderboard();
     };
   }, [teamData?.teamName]);
 
@@ -147,6 +160,14 @@ export function TeamDashboard({ onEnterRound }: TeamDashboardProps) {
           </div>
 
           <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2 bg-black border border-zinc-800 rounded-lg px-4 py-2">
+              <Trophy className="w-5 h-5 text-zinc-400" />
+              <div>
+                <p className="text-xs text-gray-400">Score</p>
+                <p className="text-lg font-bold text-white">{teamData.score}</p>
+              </div>
+            </div>
+
             {/* Points Display */}
             <div className="flex items-center gap-2 bg-black border border-zinc-800 rounded-lg px-4 py-2">
               <Coins className="w-5 h-5 text-yellow-500" />
@@ -221,6 +242,7 @@ export function TeamDashboard({ onEnterRound }: TeamDashboardProps) {
                 setTeamData({
                   ...teamData,
                   points: updatedStats.points,
+                  score: updatedStats.score,
                   rank: updatedStats.rank,
                   tokens: updatedStats.tokens,
                 });

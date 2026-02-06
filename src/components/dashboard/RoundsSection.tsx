@@ -309,7 +309,7 @@ export function RoundsSection() {
                   <label className="block text-sm text-gray-300 mb-2">Duration (minutes)</label>
                   <input
                     type="number"
-                    value={formData.duration}
+                    value={formData.duration !== undefined && isNaN(formData.duration) ? '' : formData.duration}
                     onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) })}
                     className="w-full bg-black border border-zinc-800 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-zinc-600"
                     min="1"

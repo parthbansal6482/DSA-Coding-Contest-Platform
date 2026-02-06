@@ -1,6 +1,10 @@
 const Team = require('../models/Team');
 const { generateToken } = require('../utils/jwt');
-const { broadcastSabotageAttack } = require('../socket');
+const {
+    broadcastSabotageAttack,
+    broadcastTeamStatsUpdate,
+    broadcastLeaderboardUpdate
+} = require('../socket');
 
 // @desc    Register team
 // @route   POST /api/team/register
@@ -153,16 +157,40 @@ exports.getTeamStats = async (req, res) => {
 
         const Round = require('../models/Round');
 
-        // Get all approved teams sorted by points to calculate rank
+        // Get all approved teams sorted by score to calculate rank
         const allTeams = await Team.find({ status: 'approved' })
-            .sort({ points: -1 })
-            .select('_id points');
+            .sort({ score: -1 })
+            .select('_id score');
 
         // Find current team's rank
         const rank = allTeams.findIndex(t => t._id.toString() === team._id.toString()) + 1;
 
         // Get active rounds count
         const activeRoundsCount = await Round.countDocuments({ status: 'active' });
+
+        // Cleanup expired sabotages
+        const now = new Date();
+        let changed = false;
+
+        if (team.activeSabotages && team.activeSabotages.length > 0) {
+            const initialCount = team.activeSabotages.length;
+            team.activeSabotages = team.activeSabotages.filter(s => new Date(s.endTime) > now);
+            if (team.activeSabotages.length !== initialCount) changed = true;
+        }
+
+        // Cleanup expired shield
+        if (team.shieldActive && team.shieldExpiresAt && new Date(team.shieldExpiresAt) <= now) {
+            team.shieldActive = false;
+            team.shieldExpiresAt = null;
+            if (!team.shieldCooldownUntil) {
+                team.shieldCooldownUntil = new Date(now.getTime() + 3 * 60 * 1000); // Default 3min cooldown
+            }
+            changed = true;
+        }
+
+        if (changed) {
+            await team.save();
+        }
 
         res.status(200).json({
             success: true,
@@ -171,6 +199,7 @@ exports.getTeamStats = async (req, res) => {
                 teamName: team.teamName,
                 members: team.members,
                 points: team.points || 0,
+                score: team.score || 0,
                 rank: rank || 0,
                 sabotageTokens: team.sabotageTokens || 0,
                 shieldTokens: team.shieldTokens || 0,
@@ -179,6 +208,11 @@ exports.getTeamStats = async (req, res) => {
                     shield: team.shieldTokens || 0,
                 },
                 activeRoundsCount,
+                shieldActive: team.shieldActive || false,
+                shieldExpiresAt: team.shieldExpiresAt,
+                shieldCooldownUntil: team.shieldCooldownUntil,
+                sabotageCooldownUntil: team.sabotageCooldownUntil,
+                activeSabotages: team.activeSabotages || [],
             },
         });
     } catch (error) {
@@ -245,10 +279,10 @@ exports.getTeamActivity = async (req, res) => {
 // @access  Private (Team)
 exports.getLeaderboard = async (req, res) => {
     try {
-        // Get all approved teams sorted by points (descending)
+        // Get all approved teams sorted by score (descending)
         const teams = await Team.find({ status: 'approved' })
-            .sort({ points: -1 })
-            .select('teamName points members sabotageTokens shieldTokens');
+            .sort({ score: -1 })
+            .select('teamName points score members sabotageTokens shieldTokens');
 
         // Format leaderboard data with ranks
         const leaderboard = teams.map((team, index) => ({
@@ -256,6 +290,7 @@ exports.getLeaderboard = async (req, res) => {
             rank: index + 1,
             teamName: team.teamName,
             points: team.points || 0,
+            score: team.score || 0,
             memberCount: team.members.length,
             tokens: {
                 sabotage: team.sabotageTokens || 0,
@@ -294,59 +329,54 @@ exports.purchaseToken = async (req, res) => {
             });
         }
 
-        // Validate cost
-        if (!cost || cost <= 0) {
+        // Fixed prices
+        const TOKEN_PRICES = {
+            sabotage: 250,
+            shield: 200,
+        };
+
+        const actualCost = TOKEN_PRICES[tokenType];
+
+        // Deduct points and add token atomically
+        const updatedTeam = await Team.findOneAndUpdate(
+            { _id: teamId, points: { $gte: actualCost } },
+            {
+                $inc: {
+                    points: -actualCost,
+                    [tokenType === 'sabotage' ? 'sabotageTokens' : 'shieldTokens']: 1
+                }
+            },
+            { new: true }
+        );
+
+        if (!updatedTeam) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid cost amount',
+                message: 'Insufficient points or team not found',
             });
         }
 
-        // Get fresh team data
-        const team = await Team.findById(teamId);
-        if (!team) {
-            return res.status(404).json({
-                success: false,
-                message: 'Team not found',
-            });
-        }
+        // Broadcast updates
+        broadcastTeamStatsUpdate(teamId);
+        broadcastLeaderboardUpdate();
 
-        // Check if team has enough points
-        if (team.points < cost) {
-            return res.status(400).json({
-                success: false,
-                message: `Insufficient points. You have ${team.points} points but need ${cost} points.`,
-                currentPoints: team.points,
-                requiredPoints: cost,
-            });
-        }
-
-        // Deduct points and add token
-        team.points -= cost;
-        if (tokenType === 'sabotage') {
-            team.sabotageTokens += 1;
-        } else {
-            team.shieldTokens += 1;
-        }
-
-        await team.save();
-
-        // Get updated rank
+        // Get updated rank using score
         const allTeams = await Team.find({ status: 'approved' })
-            .sort({ points: -1 })
-            .select('_id points');
-        const rank = allTeams.findIndex(t => t._id.toString() === team._id.toString()) + 1;
+            .sort({ score: -1 })
+            .select('_id score');
+        const rank = allTeams.findIndex(t => t._id.toString() === teamId.toString()) + 1;
 
         res.status(200).json({
             success: true,
             message: `Successfully purchased ${tokenType} token`,
             data: {
-                teamName: team.teamName,
-                points: team.points,
+                teamName: updatedTeam.teamName,
+                points: updatedTeam.points,
+                score: updatedTeam.score,
                 rank,
                 tokens: {
-                    sabotage: team.sabotageTokens || 0,
-                    shield: team.shieldTokens || 0,
+                    sabotage: updatedTeam.sabotageTokens || 0,
+                    shield: updatedTeam.shieldTokens || 0,
                 },
             },
         });
@@ -367,57 +397,60 @@ exports.activateShield = async (req, res) => {
     try {
         const teamId = req.team._id;
 
-        // Get fresh team data
-        const team = await Team.findById(teamId);
-        if (!team) {
-            return res.status(404).json({
-                success: false,
-                message: 'Team not found',
-            });
-        }
+        // Activate shield atomically
+        const shieldDuration = 10 * 60 * 1000; // 10 minutes
+        const cooldownDuration = 15 * 60 * 1000; // 15 minutes total from now
 
-        // Check if team has shield tokens
-        if (team.shieldTokens <= 0) {
+        const now = new Date();
+        const updatedTeam = await Team.findOneAndUpdate(
+            {
+                _id: teamId,
+                shieldTokens: { $gt: 0 },
+                $and: [
+                    {
+                        $or: [
+                            { shieldActive: false },
+                            { shieldExpiresAt: { $lte: now } }
+                        ]
+                    },
+                    {
+                        $or: [
+                            { shieldCooldownUntil: null },
+                            { shieldCooldownUntil: { $lte: now } }
+                        ]
+                    }
+                ]
+            },
+            {
+                $inc: { shieldTokens: -1 },
+                $set: {
+                    shieldActive: true,
+                    shieldExpiresAt: new Date(Date.now() + shieldDuration),
+                    shieldCooldownUntil: new Date(Date.now() + cooldownDuration)
+                }
+            },
+            { new: true }
+        );
+
+        if (!updatedTeam) {
             return res.status(400).json({
                 success: false,
-                message: 'No shield tokens available',
+                message: 'Cannot activate shield. Either no tokens, already active, or on cooldown.',
             });
         }
 
-        // Check if shield is already active
-        if (team.shieldActive && team.shieldExpiresAt && new Date() < team.shieldExpiresAt) {
-            return res.status(400).json({
-                success: false,
-                message: 'Shield is already active',
-                expiresAt: team.shieldExpiresAt,
-            });
-        }
-
-        // Check cooldown
-        if (team.shieldCooldownUntil && new Date() < team.shieldCooldownUntil) {
-            return res.status(400).json({
-                success: false,
-                message: 'Shield is on cooldown',
-                cooldownUntil: team.shieldCooldownUntil,
-            });
-        }
-
-        // Activate shield
-        team.shieldTokens -= 1;
-        team.shieldActive = true;
-        team.shieldExpiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-        team.shieldCooldownUntil = new Date(Date.now() + 15 * 60 * 1000); // 5 minutes after expiration (15 mins total)
-
-        await team.save();
+        // Broadcast stats update (token deduction)
+        broadcastTeamStatsUpdate(teamId);
+        broadcastLeaderboardUpdate();
 
         res.status(200).json({
             success: true,
             message: 'Shield activated successfully',
             data: {
-                shieldActive: team.shieldActive,
-                shieldExpiresAt: team.shieldExpiresAt,
-                shieldCooldownUntil: team.shieldCooldownUntil,
-                shieldTokens: team.shieldTokens,
+                shieldActive: updatedTeam.shieldActive,
+                shieldExpiresAt: updatedTeam.shieldExpiresAt,
+                shieldCooldownUntil: updatedTeam.shieldCooldownUntil,
+                shieldTokens: updatedTeam.shieldTokens,
             },
         });
     } catch (error) {
@@ -482,23 +515,69 @@ exports.launchSabotage = async (req, res) => {
             });
         }
 
+        // Deduct token and set cooldown atomically
+        const now = new Date();
+        const updatedTeam = await Team.findOneAndUpdate(
+            {
+                _id: teamId,
+                sabotageTokens: { $gt: 0 },
+                $or: [
+                    { sabotageCooldownUntil: null },
+                    { sabotageCooldownUntil: { $lte: now } }
+                ]
+            },
+            {
+                $inc: { sabotageTokens: -1 },
+                $set: { sabotageCooldownUntil: new Date(Date.now() + 5 * 60 * 1000) }
+            },
+            { new: true }
+        );
+
+        if (!updatedTeam) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot launch sabotage. Either no tokens or on cooldown.',
+            });
+        }
+
+        // Broadcast stats update (token deduction)
+        broadcastTeamStatsUpdate(teamId);
+
+        // Broadcast leaderboard update (token deduction)
+        broadcastLeaderboardUpdate();
+
         // Check if target has active shield
         if (targetTeam.shieldActive && targetTeam.shieldExpiresAt && new Date() < targetTeam.shieldExpiresAt) {
             return res.status(400).json({
                 success: false,
                 message: `${targetTeam.teamName} has an active shield! Your sabotage was blocked.`,
                 targetHasShield: true,
+                data: {
+                    sabotageTokens: updatedTeam.sabotageTokens,
+                    cooldownUntil: updatedTeam.sabotageCooldownUntil,
+                },
             });
         }
 
-        // Deduct token and set cooldown
-        team.sabotageTokens -= 1;
-        team.sabotageCooldownUntil = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+        // Save sabotage to target team's persistent state
+        const durations = {
+            'blackout': 60 * 1000,
+            'typing-delay': 60 * 1000,
+            'format-chaos': 60 * 1000,
+            'ui-glitch': 60 * 1000
+        };
+        const duration = durations[sabotageType] || 30000;
 
-        await team.save();
+        targetTeam.activeSabotages.push({
+            type: sabotageType,
+            startTime: now,
+            endTime: new Date(now.getTime() + duration),
+            fromTeamName: updatedTeam.teamName
+        });
+        await targetTeam.save();
 
         // Broadcast sabotage effect via WebSocket
-        await broadcastSabotageAttack(targetTeamId, team.teamName, sabotageType);
+        await broadcastSabotageAttack(targetTeamId, updatedTeam.teamName, sabotageType);
 
         res.status(200).json({
             success: true,
@@ -506,8 +585,8 @@ exports.launchSabotage = async (req, res) => {
             data: {
                 targetTeam: targetTeam.teamName,
                 sabotageType,
-                sabotageTokens: team.sabotageTokens,
-                cooldownUntil: team.sabotageCooldownUntil,
+                sabotageTokens: updatedTeam.sabotageTokens,
+                cooldownUntil: updatedTeam.sabotageCooldownUntil,
             },
         });
     } catch (error) {

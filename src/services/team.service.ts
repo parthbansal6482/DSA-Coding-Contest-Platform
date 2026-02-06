@@ -20,6 +20,7 @@ export interface TeamStats {
     teamName: string;
     members: TeamMember[];
     points: number;
+    score: number;
     rank: number;
     tokens: {
         sabotage: number;
@@ -29,6 +30,14 @@ export interface TeamStats {
     disqualifiedRounds?: string[];
     sabotageCooldownUntil?: string;
     shieldCooldownUntil?: string;
+    shieldActive?: boolean;
+    shieldExpiresAt?: string;
+    activeSabotages?: Array<{
+        type: 'blackout' | 'typing-delay' | 'format-chaos' | 'ui-glitch';
+        startTime: string;
+        endTime: string;
+        fromTeamName: string;
+    }>;
 }
 
 export interface TeamActivity {
@@ -44,6 +53,7 @@ export interface LeaderboardTeam {
     rank: number;
     teamName: string;
     points: number;
+    score: number;
     memberCount: number;
     tokens: {
         sabotage: number;

@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Clock, Zap, Shield as ShieldIcon, Maximize, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Clock, Zap, Shield as ShieldIcon, Maximize, AlertTriangle, Coins, Trophy } from 'lucide-react';
 import { QuestionList } from './round-page/QuestionList';
 import { ProblemView } from './round-page/ProblemView';
 import { TacticalPanel } from './round-page/TacticalPanel';
 import { SabotageEffects } from './round-page/SabotageEffects';
 import { getRoundQuestions } from '../services/round.service';
 import { getTeamStats, purchaseToken, getLeaderboard, LeaderboardTeam, launchSabotage, activateShield } from '../services/team.service';
-import { socketService } from '../services/socket.service';
+import { socketService, TeamStatsUpdate, SubmissionUpdate, DisqualificationUpdate, RoundUpdate } from '../services/socket.service';
 
 interface Question {
   _id: string;
@@ -74,6 +74,7 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
   const [error, setError] = useState<string | null>(null);
   const [teamName, setTeamName] = useState('Your Team');
   const [teamPoints, setTeamPoints] = useState(0);
+  const [teamScore, setTeamScore] = useState(0);
   const [allTeams, setAllTeams] = useState<TeamTarget[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isDisqualified, setIsDisqualified] = useState(false);
@@ -103,7 +104,7 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
           id: q._id,
           title: q.title,
           difficulty: q.difficulty,
-          points: q.difficulty === 'Easy' ? 100 : q.difficulty === 'Medium' ? 150 : 200,
+          points: q.points || (q.difficulty === 'Easy' ? 100 : q.difficulty === 'Medium' ? 150 : 200),
           status: q.submissionStatus || 'unsolved',
           category: q.category,
           description: q.description,
@@ -114,17 +115,33 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
           boilerplateCode: q.boilerplateCode,
         }));
 
+        // Initialize questions
         setQuestions(mappedQuestions);
         if (mappedQuestions.length > 0 && !selectedQuestion) {
           setSelectedQuestion(mappedQuestions[0]._id);
         }
 
-        // Fetch team stats for tokens
+        // Fetch team stats to get points, tokens, and current tactical state
         const teamStats = await getTeamStats();
-        setTeamName(teamStats.teamName || 'Your Team');
-        setTeamPoints(teamStats.points || 0);
-        setSabotageTokens(teamStats.tokens?.sabotage || 0);
-        setShieldTokens(teamStats.tokens?.shield || 0);
+        setTeamName(teamStats.teamName);
+        setTeamPoints(teamStats.points);
+        setTeamScore(teamStats.score);
+        setSabotageTokens(teamStats.tokens.sabotage);
+        setShieldTokens(teamStats.tokens.shield);
+        setIsShieldActive(teamStats.shieldActive || false);
+
+        // Load active sabotages from DB
+        if (teamStats.activeSabotages && teamStats.activeSabotages.length > 0) {
+          const now = Date.now();
+          const effects: SabotageEffect[] = teamStats.activeSabotages
+            .map((s: any) => ({
+              type: s.type,
+              endTime: new Date(s.endTime).getTime(),
+              fromTeam: s.fromTeamName
+            }))
+            .filter((s: any) => s.endTime > now);
+          setActiveEffects(effects);
+        }
 
         // Cooldowns
         if (teamStats.sabotageCooldownUntil) {
@@ -171,16 +188,31 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
     socketService.connect();
 
     // Subscribe to team stats updates
-    const unsubscribeStats = socketService.onTeamStatsUpdate((data) => {
+    const unsubscribeStats = socketService.onTeamStatsUpdate((data: TeamStatsUpdate) => {
       if (data.teamName === teamName) {
-        console.log('Real-time team stats update in RoundPage');
+        console.log('Real-time team stats update in RoundPage:', data);
         setSabotageTokens(data.tokens.sabotage);
         setShieldTokens(data.tokens.shield);
+        setTeamPoints(data.points);
+        setTeamScore(data.score);
+        setIsShieldActive(data.shieldActive || false);
+
+        if (data.activeSabotages) {
+          const now = Date.now();
+          const effects: SabotageEffect[] = data.activeSabotages
+            .map((s: any) => ({
+              type: s.type,
+              endTime: new Date(s.endTime).getTime(),
+              fromTeam: s.fromTeamName
+            }))
+            .filter((s: any) => s.endTime > now);
+          setActiveEffects(effects);
+        }
       }
     });
 
     // Subscribe to submission updates
-    const unsubscribeSubmission = socketService.onSubmissionUpdate((data) => {
+    const unsubscribeSubmission = socketService.onSubmissionUpdate((data: SubmissionUpdate) => {
       if (data.teamName === teamName) {
         console.log('Real-time submission update:', data.questionId, data.status);
         // Update question status based on submission
@@ -193,7 +225,7 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
     });
 
     // Subscribe to disqualification updates
-    const unsubscribeDisqualification = socketService.onDisqualificationUpdate((data) => {
+    const unsubscribeDisqualification = socketService.onDisqualificationUpdate((data: DisqualificationUpdate) => {
       if (data.teamName === teamName && data.roundId === roundId) {
         setIsDisqualified(data.isDisqualified);
         if (data.isDisqualified) {
@@ -206,7 +238,7 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
     });
 
     // Subscribe to sabotage attacks
-    const unsubscribeSabotage = socketService.onSabotageAttack((data) => {
+    const unsubscribeSabotage = socketService.onSabotageAttack((data: any) => {
       if (data.targetTeamName === teamName) {
         console.log('You are being sabotaged!', data.type, 'from', data.attackerTeamName);
 
@@ -223,12 +255,37 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
       }
     });
 
+    // Subscribe to round updates
+    const unsubscribeRound = socketService.onRoundUpdate((data: RoundUpdate) => {
+      if (data._id === roundId) {
+        console.log('Real-time round update received in RoundPage:', data);
+        setRound((prev) => prev ? { ...prev, ...data } : (data as any));
+      }
+    });
+
+    // Subscribe to leaderboard updates (for Tactical Panel)
+    const unsubscribeLeaderboard = socketService.onLeaderboardUpdate((data: LeaderboardTeam[]) => {
+      console.log('Leaderboard update received for Tactical Panel');
+      setAllTeams((prevTeams) => {
+        return data
+          .filter(t => t.teamName !== teamName) // Don't target yourself
+          .map(t => ({
+            id: t._id,
+            name: t.teamName,
+            rank: t.rank,
+            hasShield: false, // Hidden as requested
+          }));
+      });
+    });
+
     // Cleanup on unmount
     return () => {
       unsubscribeStats();
       unsubscribeSubmission();
       unsubscribeDisqualification();
       unsubscribeSabotage();
+      unsubscribeRound();
+      unsubscribeLeaderboard();
     };
   }, [teamName, roundId]);
 
@@ -510,11 +567,23 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
               </div>
             </div>
 
-            {/* Score */}
+
+            {/* Stats Overview */}
+            <div className="flex items-center gap-2 bg-black border border-zinc-800 rounded-lg px-4 py-2">
+              <Coins className="w-5 h-5 text-yellow-500" />
+              <div>
+                <p className="text-xs text-gray-400">Currency</p>
+                <p className="text-lg font-bold text-white font-mono">{teamPoints}</p>
+              </div>
+            </div>
+
+
+
+            {/* Current Round Score */}
             <div className="bg-black border border-zinc-800 rounded-lg px-4 py-2">
-              <p className="text-xs text-gray-400">Score</p>
+              <p className="text-xs text-gray-400 uppercase font-bold">Round Progress</p>
               <p className="text-lg font-bold text-white">
-                {totalPoints} pts ({solvedCount}/{questions.length})
+                {totalPoints} pts <span className="text-sm text-gray-500 font-normal">({solvedCount}/{questions.length})</span>
               </p>
             </div>
 
@@ -542,6 +611,7 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
                 try {
                   const updatedStats = await purchaseToken(type, cost);
                   setTeamPoints(updatedStats.points);
+                  setTeamScore(updatedStats.score);
                   setSabotageTokens(updatedStats.tokens.sabotage);
                   setShieldTokens(updatedStats.tokens.shield);
                 } catch (err: any) {

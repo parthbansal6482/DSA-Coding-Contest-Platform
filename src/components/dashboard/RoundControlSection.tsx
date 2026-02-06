@@ -29,13 +29,29 @@ export function RoundControlSection() {
     fetchRounds();
     fetchTeams();
 
-    const interval = setInterval(() => {
-      fetchRounds();
-      updateElapsedTimes();
-    }, 1000);
+    // Subscribe to real-time round updates
+    const unsubscribeRound = socketService.onRoundUpdate((updatedRound) => {
+      console.log('Real-time round update received in Admin:', updatedRound);
+      setRounds(prevRounds =>
+        prevRounds.map(r => r._id === updatedRound._id
+          ? {
+            ...r,
+            ...updatedRound,
+            status: updatedRound.status as any,
+            elapsedTime: calculateElapsedTime(updatedRound as any)
+          }
+          : r
+        )
+      );
+    });
+
+    const fetchInterval = setInterval(fetchRounds, 10000);
+    const tickInterval = setInterval(updateElapsedTimes, 1000);
 
     return () => {
-      clearInterval(interval);
+      clearInterval(fetchInterval);
+      clearInterval(tickInterval);
+      unsubscribeRound();
     };
   }, []);
 

@@ -16,14 +16,15 @@ const initializeSocket = (socketIO) => {
 const getLeaderboardData = async () => {
     try {
         const teams = await Team.find({ status: 'approved' })
-            .sort({ points: -1 })
-            .select('teamName points members sabotageTokens shieldTokens');
+            .sort({ score: -1 })
+            .select('teamName points score members sabotageTokens shieldTokens');
 
         return teams.map((team, index) => ({
             _id: team._id,
             rank: index + 1,
             teamName: team.teamName,
             points: team.points || 0,
+            score: team.score || 0,
             memberCount: team.members.length,
             tokens: {
                 sabotage: team.sabotageTokens || 0,
@@ -66,7 +67,7 @@ const broadcastTeamStatsUpdate = async (teamId) => {
 
     try {
         const team = await Team.findById(teamId)
-            .select('teamName points sabotageTokens shieldTokens');
+            .select('teamName points score sabotageTokens shieldTokens sabotageCooldownUntil shieldCooldownUntil shieldActive shieldExpiresAt activeSabotages');
 
         if (!team) {
             console.warn(`Team not found: ${teamId}`);
@@ -75,18 +76,24 @@ const broadcastTeamStatsUpdate = async (teamId) => {
 
         // Get team's rank
         const allTeams = await Team.find({ status: 'approved' })
-            .sort({ points: -1 })
+            .sort({ score: -1 })
             .select('_id');
         const rank = allTeams.findIndex(t => t._id.toString() === teamId.toString()) + 1;
 
         const statsUpdate = {
             teamName: team.teamName,
             points: team.points || 0,
+            score: team.score || 0,
             rank: rank || 0,
             tokens: {
                 sabotage: team.sabotageTokens || 0,
                 shield: team.shieldTokens || 0,
             },
+            sabotageCooldownUntil: team.sabotageCooldownUntil,
+            shieldCooldownUntil: team.shieldCooldownUntil,
+            shieldActive: team.shieldActive,
+            shieldExpiresAt: team.shieldExpiresAt,
+            activeSabotages: team.activeSabotages || [],
         };
 
         // Emit to all clients (they can filter by team name)
@@ -201,11 +208,31 @@ const broadcastSabotageAttack = async (targetTeamId, attackerTeamName, sabotageT
     }
 };
 
+/**
+ * Broadcast round status update to all connected clients
+ * @param {object} round - The round data
+ */
+const broadcastRoundUpdate = (round) => {
+    if (!io) return;
+    io.emit('round:update', {
+        _id: round._id,
+        name: round.name,
+        status: round.status,
+        startTime: round.startTime,
+        endTime: round.endTime,
+        duration: round.duration,
+    });
+    console.log(`Round update broadcasted: ${round.name} (${round.status})`);
+};
+
 module.exports = {
     initializeSocket,
     broadcastSubmissionUpdate,
     broadcastCheatingViolation,
     broadcastDisqualificationUpdate,
     broadcastSabotageAttack,
+    broadcastTeamStatsUpdate,
+    broadcastLeaderboardUpdate,
     getLeaderboardData,
+    broadcastRoundUpdate,
 };

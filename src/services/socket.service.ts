@@ -1,16 +1,28 @@
 import { io, Socket } from 'socket.io-client';
 import { LeaderboardTeam } from './team.service';
 
-const SOCKET_URL = window.location.origin;
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const SOCKET_URL = API_URL.replace('/api', '');
 
 export interface TeamStatsUpdate {
     teamName: string;
     points: number;
+    score: number;
     rank: number;
     tokens: {
         sabotage: number;
         shield: number;
     };
+    sabotageCooldownUntil?: string;
+    shieldCooldownUntil?: string;
+    shieldActive?: boolean;
+    shieldExpiresAt?: string;
+    activeSabotages?: Array<{
+        type: 'blackout' | 'typing-delay' | 'format-chaos' | 'ui-glitch';
+        startTime: string;
+        endTime: string;
+        fromTeamName: string;
+    }>;
 }
 
 export interface SubmissionUpdate {
@@ -36,6 +48,15 @@ export interface DisqualificationUpdate {
     roundId: string;
 }
 
+export interface RoundUpdate {
+    _id: string;
+    name: string;
+    status: string;
+    startTime?: string;
+    endTime?: string;
+    duration: number;
+}
+
 class SocketService {
     private socket: Socket | null = null;
     private leaderboardCallbacks: Set<(data: LeaderboardTeam[]) => void> = new Set();
@@ -44,6 +65,7 @@ class SocketService {
     private cheatingAlertCallbacks: Set<(data: CheatingAlert) => void> = new Set();
     private disqualificationCallbacks: Set<(data: DisqualificationUpdate) => void> = new Set();
     private sabotageCallbacks: Set<(data: any) => void> = new Set();
+    private roundCallbacks: Set<(data: RoundUpdate) => void> = new Set();
     private alertBuffer: CheatingAlert[] = [];
 
     constructor() {
@@ -137,6 +159,12 @@ class SocketService {
             console.log('Sabotage attack received:', data.type, 'from', data.attackerTeamName);
             this.sabotageCallbacks.forEach((callback) => callback(data));
         });
+
+        // Listen for round updates
+        this.socket.on('round:update', (data: RoundUpdate) => {
+            console.log('Round update received:', data.name, data.status);
+            this.roundCallbacks.forEach((callback) => callback(data));
+        });
     }
 
     /**
@@ -212,6 +240,16 @@ class SocketService {
         this.sabotageCallbacks.add(callback);
         return () => {
             this.sabotageCallbacks.delete(callback);
+        };
+    }
+
+    /**
+     * Subscribe to round updates
+     */
+    onRoundUpdate(callback: (data: RoundUpdate) => void) {
+        this.roundCallbacks.add(callback);
+        return () => {
+            this.roundCallbacks.delete(callback);
         };
     }
 
