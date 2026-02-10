@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Clock, Zap, Shield as ShieldIcon, Maximize, AlertTriangle, Coins, Trophy } from 'lucide-react';
+import { ArrowLeft, Clock, Zap, Shield as ShieldIcon, Maximize, AlertTriangle, Coins, Trophy, CheckCircle } from 'lucide-react';
 import { QuestionList } from './round-page/QuestionList';
 import { ProblemView } from './round-page/ProblemView';
 import { TacticalPanel } from './round-page/TacticalPanel';
 import { SabotageEffects } from './round-page/SabotageEffects';
-import { getRoundQuestions } from '../services/round.service';
+import { getRoundQuestions, exitRound, completeRound } from '../services/round.service';
 import { getTeamStats, purchaseToken, getLeaderboard, LeaderboardTeam, launchSabotage, activateShield } from '../services/team.service';
 import { socketService, TeamStatsUpdate, SubmissionUpdate, DisqualificationUpdate, RoundUpdate } from '../services/socket.service';
 
@@ -30,7 +30,6 @@ interface Question {
     c?: string;
     cpp?: string;
     java?: string;
-    javascript?: string;
   };
 }
 
@@ -82,6 +81,7 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
   const [sabotageCooldown, setSabotageCooldown] = useState<number | null>(null);
   const [shieldCooldown, setShieldCooldown] = useState<number | null>(null);
   const [tacticalMessage, setTacticalMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
+  const [showExitConfirmation, setShowExitConfirmation] = useState(false);
   const violationRef = useRef<{ startTime: number | null, type: string | null }>({ startTime: null, type: null });
 
   // Fetch round data and team stats
@@ -404,10 +404,61 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
     }
   };
 
-  const handleExitRound = () => {
-    const confirmed = window.confirm("Are you sure you want to leave the round? Your progress will be saved, but your current session state (like real-time ranking and points) will be refreshed when you re-enter.");
+  const handleExitRound = async () => {
+    const confirmed = window.confirm(
+      "⚠️ Are you sure you want to exit this round?\n\n" +
+      "All your progress will be DELETED:\n" +
+      "• All code submissions will be removed\n" +
+      "• Question statuses will be reset\n" +
+      "• Points earned in this round will be deducted\n\n" +
+      "You will start fresh if you re-enter this round."
+    );
+
     if (confirmed) {
-      onExitRound();
+      try {
+        // Clear all saved code for this round from localStorage
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith(`code_${roundId}_`)) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(key => localStorage.removeItem(key));
+        console.log(`Cleared ${keysToRemove.length} saved code entries from localStorage`);
+
+        // Call API to delete submissions and reset progress
+        await exitRound(roundId);
+        // Navigate back to dashboard
+        onExitRound();
+      } catch (error: any) {
+        console.error('Error exiting round:', error);
+        alert(error.response?.data?.message || 'Failed to exit round. Please try again.');
+      }
+    }
+  };
+
+  const handleCompleteRound = async () => {
+    const confirmed = window.confirm(
+      "✅ Complete this round?\n\n" +
+      "Your progress will be SAVED:\n" +
+      "• All submissions kept\n" +
+      "• Points remain\n" +
+      "• Question statuses preserved\n\n" +
+      "⚠️ You will NOT be able to re-enter this round.\n\n" +
+      "Are you sure you want to mark this round as complete?"
+    );
+
+    if (confirmed) {
+      try {
+        // Call API to mark round as completed
+        await completeRound(roundId);
+        // Navigate back to dashboard
+        onExitRound();
+      } catch (error: any) {
+        console.error('Error completing round:', error);
+        alert(error.response?.data?.message || 'Failed to complete round. Please try again.');
+      }
     }
   };
 
@@ -555,6 +606,13 @@ export function RoundPage({ roundId, onExitRound }: RoundPageProps) {
               <h1 className="text-xl font-bold text-white">{round.name}</h1>
               <p className="text-sm text-gray-400">{teamName}</p>
             </div>
+            <button
+              onClick={handleCompleteRound}
+              className="bg-white text-black px-4 py-2 rounded-lg font-medium hover:bg-gray-200 transition-colors flex items-center gap-2"
+            >
+              <CheckCircle className="w-4 h-4" />
+              Complete Round
+            </button>
           </div>
 
           <div className="flex items-center gap-6">

@@ -31,7 +31,17 @@ exports.protect = async (req, res, next) => {
             req.admin = await Admin.findById(decoded.id).select('-password');
             req.userType = 'admin';
         } else if (decoded.type === 'team') {
-            req.team = await Team.findById(decoded.id).select('-password');
+            const team = await Team.findById(decoded.id).select('-password');
+            if (!team) {
+                return res.status(401).json({
+                    success: false,
+                    message: 'Team not found',
+                });
+            }
+
+            // Check if this is the active session (if we decide to implement session IDs)
+            // For now, let's just attach the team
+            req.team = team;
             req.userType = 'team';
         }
 

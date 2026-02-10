@@ -53,7 +53,7 @@ const getRoundQuestions = async (req, res) => {
         console.log('Team ID:', req.team?._id);
 
         const round = await Round.findById(req.params.id)
-            .populate('questions', '-createdBy -createdAt -updatedAt')
+            .populate('questions', '-createdBy -createdAt -updatedAt -hiddenTestCases')
             .select('name duration status startTime endTime questions');
 
         console.log('Round found:', round ? 'Yes' : 'No');
@@ -85,6 +85,14 @@ const getRoundQuestions = async (req, res) => {
             });
         }
 
+        // Check if team has already completed this round
+        if (req.team.completedRounds && req.team.completedRounds.includes(req.params.id)) {
+            return res.status(403).json({
+                success: false,
+                message: 'You have already completed this round and cannot re-enter',
+            });
+        }
+
         // Get team's submissions for this round
         const submissions = await Submission.find({
             team: req.team._id,
@@ -111,8 +119,20 @@ const getRoundQuestions = async (req, res) => {
         const questionsWithStatus = round.questions.map(q => {
             const questionObj = q.toObject();
             const submission = submissionMap[q._id.toString()];
-            questionObj.submissionStatus = submission ? submission.status : 'unsolved';
-            questionObj.earnedPoints = submission ? submission.points : 0;
+
+            // Map backend submission status to frontend status
+            if (submission) {
+                if (submission.status === 'accepted') {
+                    questionObj.submissionStatus = 'solved';
+                } else {
+                    questionObj.submissionStatus = 'attempted';
+                }
+                questionObj.earnedPoints = submission.points;
+            } else {
+                questionObj.submissionStatus = 'unsolved';
+                questionObj.earnedPoints = 0;
+            }
+
             return questionObj;
         });
 
@@ -195,7 +215,7 @@ const runCode = async (req, res) => {
         }
 
         // Check if question exists and belongs to this round
-        const question = await Question.findById(questionId);
+        const question = await Question.findById(questionId).select('+hiddenTestCases');
         if (!question) {
             return res.status(404).json({
                 success: false,
@@ -210,7 +230,7 @@ const runCode = async (req, res) => {
             });
         }
 
-        // Run code against sample test cases (examples)
+        // Run code against sample test cases (examples only, not hidden test cases)
         const { runTestCases } = require('../services/execution.service');
 
         const testCases = question.examples.map(example => ({
@@ -304,7 +324,7 @@ const submitSolution = async (req, res) => {
         }
 
         // Check if question exists and belongs to this round
-        const question = await Question.findById(questionId);
+        const question = await Question.findById(questionId).select('+hiddenTestCases');
         if (!question) {
             return res.status(404).json({
                 success: false,
@@ -319,11 +339,19 @@ const submitSolution = async (req, res) => {
             });
         }
 
-        // Prepare test cases from examples
-        const testCases = question.examples.map(example => ({
+        // Prepare test cases - combine examples and hidden test cases
+        const visibleTestCases = question.examples.map(example => ({
             input: example.input,
             expectedOutput: example.output,
         }));
+
+        const hiddenTestCases = (question.hiddenTestCases || []).map(testCase => ({
+            input: testCase.input,
+            expectedOutput: testCase.output,
+        }));
+
+        // Combine all test cases for evaluation
+        const testCases = [...visibleTestCases, ...hiddenTestCases];
 
         // Run test cases synchronously
         const result = await runTestCases(code, language, testCases);
@@ -454,11 +482,19 @@ async function runCodeAsync(submissionId, code, language, question, teamId) {
     const { runTestCases } = require('../services/execution.service');
 
     try {
-        // Prepare test cases from examples
-        const testCases = question.examples.map(example => ({
+        // Prepare test cases - combine examples and hidden test cases
+        const visibleTestCases = question.examples.map(example => ({
             input: example.input,
             expectedOutput: example.output,
         }));
+
+        const hiddenTestCases = (question.hiddenTestCases || []).map(testCase => ({
+            input: testCase.input,
+            expectedOutput: testCase.output,
+        }));
+
+        // Combine all test cases for evaluation
+        const testCases = [...visibleTestCases, ...hiddenTestCases];
 
         // Run test cases
         const result = await runTestCases(code, language, testCases);
@@ -881,6 +917,124 @@ const updateRoundStatus = async (req, res) => {
     }
 };
 
+/**
+ * @desc    Exit round (delete all submissions and deduct points)
+ * @route   POST /api/rounds/:id/exit
+ * @access  Private/Team
+ */
+const exitRound = async (req, res) => {
+    try {
+        const roundId = req.params.id;
+        const teamId = req.team._id;
+
+        console.log(`Team ${teamId} exiting round ${roundId}`);
+
+        // Find all submissions for this team in this round
+        const submissions = await Submission.find({
+            team: teamId,
+            round: roundId,
+        });
+
+        console.log(`Found ${submissions.length} submissions to delete`);
+
+        // Calculate total points earned from accepted submissions
+        const pointsToDeduct = submissions
+            .filter(sub => sub.status === 'accepted')
+            .reduce((sum, sub) => sum + (sub.points || 0), 0);
+
+        console.log(`Points to deduct: ${pointsToDeduct}`);
+
+        // Delete all submissions for this round
+        const deleteResult = await Submission.deleteMany({
+            team: teamId,
+            round: roundId,
+        });
+
+        console.log(`Deleted ${deleteResult.deletedCount} submissions`);
+
+        // Deduct points from team's score if any were earned
+        if (pointsToDeduct > 0) {
+            // Get current team to check score
+            const currentTeam = await Team.findById(teamId);
+
+            // Calculate new scores (ensure they don't go negative)
+            const newScore = Math.max(0, (currentTeam.score || 0) - pointsToDeduct);
+            const newPoints = Math.max(0, (currentTeam.points || 0) - pointsToDeduct);
+
+            await Team.findByIdAndUpdate(teamId, {
+                $set: {
+                    score: newScore,
+                    points: newPoints,
+                }
+            });
+            console.log(`Deducted ${pointsToDeduct} points from team score (new score: ${newScore})`);
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Successfully exited round. All progress has been reset.',
+            data: {
+                submissionsDeleted: deleteResult.deletedCount,
+                pointsDeducted: pointsToDeduct,
+            },
+        });
+    } catch (error) {
+        console.error('Error exiting round:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error exiting round',
+            error: error.message,
+        });
+    }
+};
+
+/**
+ * @desc    Complete round (keep progress, prevent re-entry)
+ * @route   POST /api/rounds/:id/complete
+ * @access  Private/Team
+ */
+const completeRound = async (req, res) => {
+    try {
+        const roundId = req.params.id;
+        const teamId = req.team._id;
+
+        console.log(`Team ${teamId} completing round ${roundId}`);
+
+        // Check if already completed
+        const team = await Team.findById(teamId);
+        if (team.completedRounds && team.completedRounds.includes(roundId)) {
+            return res.status(400).json({
+                success: false,
+                message: 'You have already completed this round',
+            });
+        }
+
+        // Add round to completedRounds array
+        await Team.findByIdAndUpdate(teamId, {
+            $addToSet: {
+                completedRounds: roundId,
+            }
+        });
+
+        console.log(`Round ${roundId} marked as completed for team ${teamId}`);
+
+        res.status(200).json({
+            success: true,
+            message: 'Round completed successfully. You cannot re-enter this round.',
+            data: {
+                roundId: roundId,
+            },
+        });
+    } catch (error) {
+        console.error('Error completing round:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error completing round',
+            error: error.message,
+        });
+    }
+};
+
 module.exports = {
     createRound,
     getAllRounds,
@@ -893,5 +1047,7 @@ module.exports = {
     runCode,
     submitSolution,
     getRoundSubmissions,
+    exitRound,
+    completeRound,
 };
 

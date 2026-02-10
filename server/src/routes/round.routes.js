@@ -12,6 +12,8 @@ const {
     runCode,
     submitSolution,
     getRoundSubmissions,
+    exitRound,
+    completeRound,
 } = require('../controllers/round.controller');
 const { protect, adminOnly, teamOnly } = require('../middleware/auth');
 const { validateRound } = require('../middleware/validation');
@@ -41,6 +43,16 @@ router.post('/:id/submit', protect, teamOnly, submitSolution);
 // @desc    Get team's submissions for a round
 // @access  Private/Team
 router.get('/:id/submissions', protect, teamOnly, getRoundSubmissions);
+
+// @route   POST /api/rounds/:id/exit
+// @desc    Exit round and reset progress
+// @access  Private/Team
+router.post('/:id/exit', protect, teamOnly, exitRound);
+
+// @route   POST /api/rounds/:id/complete
+// @desc    Complete round and prevent re-entry
+// @access  Private/Team
+router.post('/:id/complete', protect, teamOnly, completeRound);
 
 // Admin routes - all routes below require admin authentication
 router.use(protect);

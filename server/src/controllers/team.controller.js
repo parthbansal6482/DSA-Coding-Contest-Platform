@@ -91,6 +91,15 @@ exports.login = async (req, res) => {
             });
         }
 
+        // Check if team is already active on another device
+        const { isTeamActive } = require('../socket');
+        if (isTeamActive(team._id)) {
+            return res.status(403).json({
+                success: false,
+                message: 'Your team is already logged in on another device. Please close the other session first.',
+            });
+        }
+
         // Generate token
         const token = generateToken(team._id, 'team');
 

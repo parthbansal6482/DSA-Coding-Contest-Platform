@@ -97,6 +97,10 @@ const teamSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Round',
         }],
+        completedRounds: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Round',
+        }],
         activeSabotages: [{
             type: {
                 type: String,

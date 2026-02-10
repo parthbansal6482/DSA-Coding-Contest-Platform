@@ -38,8 +38,9 @@ exports.submitCode = async (req, res) => {
             });
         }
 
+
         // Check if question exists and belongs to round
-        const question = await Question.findById(questionId);
+        const question = await Question.findById(questionId).select('+hiddenTestCases');
         if (!question) {
             return res.status(404).json({
                 success: false,
@@ -62,7 +63,7 @@ exports.submitCode = async (req, res) => {
             code,
             language,
             status: 'pending',
-            totalTestCases: question.examples?.length || 0,
+            totalTestCases: (question.examples?.length || 0) + (question.hiddenTestCases?.length || 0),
         });
 
         // Run code asynchronously
@@ -91,11 +92,19 @@ exports.submitCode = async (req, res) => {
  */
 async function runCodeAsync(submissionId, code, language, question, round) {
     try {
-        // Prepare test cases
-        const testCases = question.examples.map(example => ({
+        // Prepare test cases - combine examples and hidden test cases
+        const visibleTestCases = question.examples.map(example => ({
             input: example.input,
             expectedOutput: example.output,
         }));
+
+        const hiddenTestCases = (question.hiddenTestCases || []).map(testCase => ({
+            input: testCase.input,
+            expectedOutput: testCase.output,
+        }));
+
+        // Combine all test cases for evaluation
+        const testCases = [...visibleTestCases, ...hiddenTestCases];
 
         // Run test cases
         const result = await runTestCases(code, language, testCases);

@@ -15,9 +15,10 @@ interface Round {
 interface ActiveRoundsProps {
   onEnterRound?: (roundId: string) => void;
   disqualifiedRounds?: string[];
+  completedRounds?: string[];
 }
 
-export function ActiveRounds({ onEnterRound, disqualifiedRounds = [] }: ActiveRoundsProps) {
+export function ActiveRounds({ onEnterRound, disqualifiedRounds = [], completedRounds = [] }: ActiveRoundsProps) {
   const [rounds, setRounds] = useState<Round[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -131,13 +132,16 @@ export function ActiveRounds({ onEnterRound, disqualifiedRounds = [] }: ActiveRo
             const activeRound = rounds.find((r) => r.status === 'active');
             if (!activeRound) return null;
             const isDisqualified = disqualifiedRounds.includes(activeRound._id);
+            const isCompleted = completedRounds.includes(activeRound._id);
 
             return (
               <button
-                disabled={isDisqualified}
+                disabled={isDisqualified || isCompleted}
                 onClick={() => handleEnterRound(activeRound._id)}
                 className={`px-6 py-2 rounded-lg font-medium transition-colors flex items-center gap-2 ${isDisqualified
-                    ? 'bg-red-500/20 text-red-500 cursor-not-allowed border border-red-500/30'
+                  ? 'bg-red-500/20 text-red-500 cursor-not-allowed border border-red-500/30'
+                  : isCompleted
+                    ? 'bg-emerald-500/20 text-emerald-500 cursor-not-allowed border border-emerald-500/30'
                     : 'bg-green-500 text-white hover:bg-green-600'
                   }`}
               >
@@ -145,6 +149,11 @@ export function ActiveRounds({ onEnterRound, disqualifiedRounds = [] }: ActiveRo
                   <>
                     <Lock className="w-4 h-4" />
                     Disqualified
+                  </>
+                ) : isCompleted ? (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    Round Finished
                   </>
                 ) : (
                   <>
@@ -174,6 +183,12 @@ export function ActiveRounds({ onEnterRound, disqualifiedRounds = [] }: ActiveRo
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-xl font-bold text-white">{round.name}</h3>
                     {getStatusBadge(round.status)}
+                    {completedRounds.includes(round._id) && (
+                      <span className="flex items-center gap-1 px-3 py-1 bg-emerald-500/10 text-emerald-500 rounded-full text-xs font-medium border border-emerald-500/20">
+                        <CheckCircle className="w-3 h-3" />
+                        You Completed This
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-4 text-sm text-gray-400">
                     <div className="flex items-center gap-1">
@@ -200,12 +215,15 @@ export function ActiveRounds({ onEnterRound, disqualifiedRounds = [] }: ActiveRo
               <div>
                 {round.status === 'active' && (() => {
                   const isDisqualified = disqualifiedRounds.includes(round._id);
+                  const isCompleted = completedRounds.includes(round._id);
                   return (
                     <button
-                      disabled={isDisqualified}
+                      disabled={isDisqualified || isCompleted}
                       onClick={() => handleEnterRound(round._id)}
                       className={`w-full py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2 ${isDisqualified
-                          ? 'bg-red-500/10 text-red-500 cursor-not-allowed border border-red-500/20'
+                        ? 'bg-red-500/10 text-red-500 cursor-not-allowed border border-red-500/20'
+                        : isCompleted
+                          ? 'bg-emerald-500/10 text-emerald-500 cursor-not-allowed border border-emerald-500/20'
                           : 'bg-white text-black hover:bg-gray-200'
                         }`}
                     >
@@ -213,6 +231,11 @@ export function ActiveRounds({ onEnterRound, disqualifiedRounds = [] }: ActiveRo
                         <>
                           <Lock className="w-5 h-5" />
                           Disqualified from this Round
+                        </>
+                      ) : isCompleted ? (
+                        <>
+                          <CheckCircle className="w-5 h-5" />
+                          Round Completed
                         </>
                       ) : (
                         <>

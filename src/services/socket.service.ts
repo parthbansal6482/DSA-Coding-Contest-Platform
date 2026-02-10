@@ -97,6 +97,11 @@ class SocketService {
      */
     connect() {
         if (this.socket?.connected) {
+            // Already connected, but maybe we just logged in?
+            const token = localStorage.getItem('token');
+            if (token) {
+                this.socket.emit('team:authenticate', token);
+            }
             return;
         }
 
@@ -109,6 +114,12 @@ class SocketService {
 
         this.socket.on('connect', () => {
             console.log('WebSocket connected:', this.socket?.id);
+
+            // Authenticate if we have a token
+            const token = localStorage.getItem('token');
+            if (token) {
+                this.socket?.emit('team:authenticate', token);
+            }
         });
 
         this.socket.on('disconnect', () => {

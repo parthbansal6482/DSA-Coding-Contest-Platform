@@ -4,7 +4,15 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const connectDB = require('./config/database');
-const { initializeSocket, getLeaderboardData, broadcastCheatingViolation } = require('./socket');
+const {
+    initializeSocket,
+    getLeaderboardData,
+    broadcastCheatingViolation,
+    isTeamActive,
+    addActiveTeam,
+    removeActiveTeam
+} = require('./socket');
+const { verifyToken } = require('./utils/jwt');
 
 // Import routes
 const adminRoutes = require('./routes/admin.routes');
@@ -43,6 +51,18 @@ io.on('connection', async (socket) => {
         console.error('Error sending initial leaderboard:', error);
     }
 
+    // Handle team authentication for session tracking
+    socket.on('team:authenticate', (token) => {
+        try {
+            const decoded = verifyToken(token);
+            if (decoded && decoded.type === 'team') {
+                addActiveTeam(decoded.id, socket.id);
+            }
+        } catch (error) {
+            console.error('Socket authentication error:', error);
+        }
+    });
+
     // Handle cheating violations reported by clients
     socket.on('cheating:violation', ({ teamName, roundName, violationType, action, duration }) => {
         console.log(`Violation reported: ${teamName} - ${violationType} (${action}${duration ? `, ${duration}s` : ''}) in ${roundName}`);
@@ -51,6 +71,7 @@ io.on('connection', async (socket) => {
 
     socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);
+        removeActiveTeam(socket.id);
     });
 });
 
@@ -59,16 +80,24 @@ connectDB();
 
 // Middleware
 const allowedOrigins = [
-    process.env.CLIENT_URL || 'http://localhost:3000',
-    'http://localhost:5173',
-    'https://uninfectiously-rancid-tianna.ngrok-free.dev'
+    'https://dsa-coding-contest-platform.vercel.app',  // Production
+    'http://localhost:3000',                            // Local development
+    'http://localhost:5173',                            // Vite default port (if different)
 ];
-
 app.use(cors({
-    origin: "https://dsa-coding-contest-platform.vercel.app",
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"]
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true
 }));
+
 app.options("*", cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

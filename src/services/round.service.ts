@@ -145,3 +145,20 @@ export const runCode = async (
     });
     return response.data;
 };
+
+/**
+ * Exit round and reset all progress
+ */
+export const exitRound = async (roundId: string) => {
+    const response = await api.post(`/rounds/${roundId}/exit`);
+    return response.data;
+};
+
+/**
+ * Complete round (keep progress, prevent re-entry)
+ */
+export const completeRound = async (roundId: string) => {
+    const response = await api.post(`/rounds/${roundId}/complete`);
+    return response.data;
+};
+

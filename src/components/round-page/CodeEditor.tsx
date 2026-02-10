@@ -16,7 +16,6 @@ interface Question {
     c?: string;
     cpp?: string;
     java?: string;
-    javascript?: string;
   };
 }
 

@@ -1,6 +1,7 @@
 const Team = require('./models/Team');
 
 let io = null;
+const activeTeams = new Map(); // teamId -> socketId
 
 /**
  * Initialize Socket.IO instance
@@ -8,6 +9,52 @@ let io = null;
 const initializeSocket = (socketIO) => {
     io = socketIO;
     console.log('Socket.IO initialized');
+};
+
+/**
+ * Check if a team is already active on another device
+ * @param {string} teamId 
+ */
+const isTeamActive = (teamId) => {
+    const tid = teamId.toString();
+    const activeSocketId = activeTeams.get(tid);
+    console.log(`Checking if team ${tid} is active. Found socket ID: ${activeSocketId}`);
+
+    if (activeSocketId && io) {
+        // Double check if the socket actually exists/is connected
+        const socket = io.sockets.sockets.get(activeSocketId);
+        if (socket && socket.connected) {
+            console.log(`Team ${tid} is active (socket ${activeSocketId} connected)`);
+            return true;
+        }
+        console.log(`Team ${tid} socket ${activeSocketId} found but not connected. Cleaning up.`);
+        // If not connected, clean up
+        activeTeams.delete(tid);
+    } else {
+        console.log(`Team ${tid} is not active (no socket or no io)`);
+    }
+    return false;
+};
+
+/**
+ * Add an active team session
+ */
+const addActiveTeam = (teamId, socketId) => {
+    activeTeams.set(teamId.toString(), socketId);
+    console.log(`Team session registered: ${teamId} -> ${socketId}`);
+};
+
+/**
+ * Remove an active team session by socket ID
+ */
+const removeActiveTeam = (socketId) => {
+    for (const [teamId, sid] of activeTeams.entries()) {
+        if (sid === socketId) {
+            activeTeams.delete(teamId);
+            console.log(`Team session removed: ${teamId} (socket: ${socketId})`);
+            break;
+        }
+    }
 };
 
 /**
@@ -235,4 +282,7 @@ module.exports = {
     broadcastLeaderboardUpdate,
     getLeaderboardData,
     broadcastRoundUpdate,
+    isTeamActive,
+    addActiveTeam,
+    removeActiveTeam,
 };

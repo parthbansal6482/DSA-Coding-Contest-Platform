@@ -84,7 +84,6 @@ export function MonacoCodeEditor({
             c: 'c',
             cpp: 'cpp',
             java: 'java',
-            javascript: 'javascript',
         };
         return languageMap[lang] || 'plaintext';
     };

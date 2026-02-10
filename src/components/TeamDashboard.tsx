@@ -161,7 +161,7 @@ export function TeamDashboard({ onEnterRound }: TeamDashboardProps) {
 
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2 bg-black border border-zinc-800 rounded-lg px-4 py-2">
-              <Trophy className="w-5 h-5 text-zinc-400" />
+              <Trophy className="w-5 h-5 text-yellow-500" />
               <div>
                 <p className="text-xs text-gray-400">Score</p>
                 <p className="text-lg font-bold text-white">{teamData.score}</p>
@@ -178,14 +178,18 @@ export function TeamDashboard({ onEnterRound }: TeamDashboardProps) {
             </div>
 
             {/* Tokens Display */}
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 bg-black border border-zinc-800 rounded-lg px-3 py-2">
-                <Zap className="w-4 h-4 text-red-500" />
-                <span className="text-white font-medium">{teamData.tokens.sabotage}</span>
+            <div className="flex items-center gap-2 bg-black border border-zinc-800 rounded-lg px-4 py-2">
+              <Zap className="w-5 h-5 text-red-500" />
+              <div>
+                <p className="text-xs text-gray-400">Sabotage</p>
+                <span className="text-lg font-bold text-white">{teamData.tokens.sabotage}</span>
               </div>
-              <div className="flex items-center gap-2 bg-black border border-zinc-800 rounded-lg px-3 py-2">
-                <ShieldIcon className="w-4 h-4 text-blue-500" />
-                <span className="text-white font-medium">{teamData.tokens.shield}</span>
+            </div>
+            <div className="flex items-center gap-2 bg-black border border-zinc-800 rounded-lg px-4 py-2">
+              <ShieldIcon className="w-5 h-5 text-blue-500" />
+              <div>
+                <p className="text-xs text-gray-400">Shield</p>
+                <span className="text-lg font-bold text-white">{teamData.tokens.shield}</span>
               </div>
             </div>
 
@@ -230,6 +234,7 @@ export function TeamDashboard({ onEnterRound }: TeamDashboardProps) {
           <ActiveRounds
             onEnterRound={onEnterRound}
             disqualifiedRounds={teamData.disqualifiedRounds}
+            completedRounds={teamData.completedRounds}
           />
         )}
         {activeSection === 'shop' && (

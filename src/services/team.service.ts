@@ -28,6 +28,7 @@ export interface TeamStats {
     };
     activeRoundsCount: number;
     disqualifiedRounds?: string[];
+    completedRounds?: string[];
     sabotageCooldownUntil?: string;
     shieldCooldownUntil?: string;
     shieldActive?: boolean;

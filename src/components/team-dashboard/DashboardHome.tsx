@@ -36,7 +36,7 @@ export function DashboardHome({ teamData }: { teamData: TeamStats }) {
   };
 
   const stats = [
-    { label: 'Total Points', value: teamData.points.toString(), icon: Award, color: 'text-yellow-500' },
+    { label: 'Currency', value: teamData.points.toString(), icon: Award, color: 'text-yellow-500' },
     { label: 'Current Rank', value: `#${teamData.rank}`, icon: Target, color: 'text-blue-500' },
     { label: 'Team Members', value: teamData.members.length.toString(), icon: Users, color: 'text-green-500' },
     { label: 'Active Rounds', value: teamData.activeRoundsCount.toString(), icon: Clock, color: 'text-purple-500' },

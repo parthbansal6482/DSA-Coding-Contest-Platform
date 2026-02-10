@@ -127,7 +127,7 @@ export function Leaderboard({ currentTeam }: { currentTeam: string }) {
                 <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Rank</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Team</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Score</th>
-                <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Points</th>
+                <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Currency</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Members</th>
                 <th className="text-left px-6 py-4 text-sm font-medium text-gray-400">Tokens</th>
               </tr>

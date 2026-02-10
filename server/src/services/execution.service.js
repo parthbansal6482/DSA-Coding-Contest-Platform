@@ -12,12 +12,6 @@ const LANGUAGE_CONFIG = {
         command: (filename) => ['python3', filename],
         timeout: 10000, // 10 seconds
     },
-    javascript: {
-        image: 'code-executor:latest',
-        extension: '.js',
-        command: (filename) => ['node', filename],
-        timeout: 10000,
-    },
     cpp: {
         image: 'code-executor:latest',
         extension: '.cpp',

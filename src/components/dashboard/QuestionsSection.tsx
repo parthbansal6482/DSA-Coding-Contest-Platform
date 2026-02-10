@@ -19,13 +19,13 @@ interface Question {
   outputFormat: string;
   constraints: string;
   examples: { input: string; output: string; explanation?: string }[];
+  hiddenTestCases?: { input: string; output: string; explanation?: string }[];
   testCases: number;
   boilerplateCode?: {
     python?: string;
     c?: string;
     cpp?: string;
     java?: string;
-    javascript?: string;
   };
 }
 
@@ -47,13 +47,12 @@ export function QuestionsSection() {
     outputFormat: '',
     constraints: '',
     examples: [{ input: '', output: '', explanation: '' }],
-    testCases: 5,
+    hiddenTestCases: [],
     boilerplateCode: {
       python: '# Write your solution here\n',
       c: '// Write your solution here\n',
       cpp: '// Write your solution here\n',
       java: '// Write your solution here\n',
-      javascript: '// Write your solution here\n',
     },
   });
 
@@ -93,13 +92,12 @@ export function QuestionsSection() {
         outputFormat: question.outputFormat,
         constraints: question.constraints,
         examples: question.examples,
-        testCases: question.testCases,
+        hiddenTestCases: question.hiddenTestCases || [],
         boilerplateCode: question.boilerplateCode || {
           python: '# Write your solution here\n',
           c: '// Write your solution here\n',
           cpp: '// Write your solution here\n',
           java: '// Write your solution here\n',
-          javascript: '// Write your solution here\n',
         },
       });
     } else {
@@ -113,13 +111,12 @@ export function QuestionsSection() {
         outputFormat: '',
         constraints: '',
         examples: [{ input: '', output: '', explanation: '' }],
-        testCases: 5,
+        hiddenTestCases: [],
         boilerplateCode: {
           python: '# Write your solution here\n',
           c: '// Write your solution here\n',
           cpp: '// Write your solution here\n',
           java: '// Write your solution here\n',
-          javascript: '// Write your solution here\n',
         },
       });
     }
@@ -139,10 +136,14 @@ export function QuestionsSection() {
     setError('');
 
     try {
+      // Auto-calculate testCases from examples and hiddenTestCases
+      const totalTestCases = (formData.examples?.length || 0) + (formData.hiddenTestCases?.length || 0);
+      const dataToSubmit = { ...formData, testCases: totalTestCases };
+
       if (editingQuestion) {
-        await updateQuestion(editingQuestion._id, formData);
+        await updateQuestion(editingQuestion._id, dataToSubmit);
       } else {
-        await createQuestion(formData as CreateQuestionData);
+        await createQuestion(dataToSubmit as CreateQuestionData);
       }
       await fetchQuestions();
       handleCloseModal();
@@ -367,17 +368,6 @@ export function QuestionsSection() {
                   />
                 </div>
 
-                <div className="col-span-2">
-                  <label className="block text-sm text-gray-300 mb-2">Test Cases Count</label>
-                  <input
-                    type="number"
-                    value={formData.testCases !== undefined && isNaN(formData.testCases) ? '' : formData.testCases}
-                    onChange={(e) => setFormData({ ...formData, testCases: parseInt(e.target.value) })}
-                    className="w-full bg-black border border-zinc-800 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-zinc-600"
-                    min="1"
-                    required
-                  />
-                </div>
 
                 <div className="col-span-2">
                   <label className="block text-sm text-gray-300 mb-2">Examples</label>
@@ -434,13 +424,93 @@ export function QuestionsSection() {
                   </button>
                 </div>
 
+                {/* Hidden Test Cases Section */}
+                <div className="col-span-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm text-gray-300">
+                      Hidden Test Cases
+                      <span className="text-xs text-gray-500 ml-2">(Private - not visible to teams)</span>
+                    </label>
+                  </div>
+                  {formData.hiddenTestCases && formData.hiddenTestCases.length > 0 ? (
+                    formData.hiddenTestCases.map((testCase, index) => (
+                      <div key={index} className="mb-3 p-3 bg-black border border-amber-900/30 rounded-lg">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs text-amber-500 font-medium">Hidden Test Case {index + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newHiddenTests = [...(formData.hiddenTestCases || [])];
+                              newHiddenTests.splice(index, 1);
+                              setFormData({ ...formData, hiddenTestCases: newHiddenTests });
+                            }}
+                            className="text-xs text-red-400 hover:text-red-300"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            placeholder="Input"
+                            value={testCase.input}
+                            onChange={(e) => {
+                              const newHiddenTests = [...(formData.hiddenTestCases || [])];
+                              newHiddenTests[index] = { ...newHiddenTests[index], input: e.target.value };
+                              setFormData({ ...formData, hiddenTestCases: newHiddenTests });
+                            }}
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded py-1 px-2 text-white text-sm"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Output"
+                            value={testCase.output}
+                            onChange={(e) => {
+                              const newHiddenTests = [...(formData.hiddenTestCases || [])];
+                              newHiddenTests[index] = { ...newHiddenTests[index], output: e.target.value };
+                              setFormData({ ...formData, hiddenTestCases: newHiddenTests });
+                            }}
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded py-1 px-2 text-white text-sm"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Explanation (optional)"
+                            value={testCase.explanation || ''}
+                            onChange={(e) => {
+                              const newHiddenTests = [...(formData.hiddenTestCases || [])];
+                              newHiddenTests[index] = { ...newHiddenTests[index], explanation: e.target.value };
+                              setFormData({ ...formData, hiddenTestCases: newHiddenTests });
+                            }}
+                            className="w-full bg-zinc-900 border border-zinc-800 rounded py-1 px-2 text-white text-sm"
+                          />
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-sm text-gray-500 italic mb-2">No hidden test cases added yet</div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setFormData({
+                      ...formData,
+                      hiddenTestCases: [...(formData.hiddenTestCases || []), { input: '', output: '', explanation: '' }]
+                    })}
+                    className="text-sm text-gray-400 hover:text-white"
+                  >
+                    + Add Hidden Test Case
+                  </button>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Hidden test cases are used for evaluation but not shown to teams
+                  </p>
+                </div>
+
                 {/* Boilerplate Code Section */}
                 <div className="col-span-2">
                   <label className="block text-sm text-gray-300 mb-2">Boilerplate Code (Starter Code)</label>
                   <div className="bg-black border border-zinc-800 rounded-lg overflow-hidden">
                     {/* Language Tabs */}
                     <div className="flex border-b border-zinc-800">
-                      {['python', 'c', 'cpp', 'java', 'javascript'].map((lang) => (
+                      {['python', 'c', 'cpp', 'java'].map((lang) => (
                         <button
                           key={lang}
                           type="button"

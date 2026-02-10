@@ -61,6 +61,11 @@ const questionSchema = new mongoose.Schema({
             message: 'At least one example is required',
         },
     },
+    hiddenTestCases: {
+        type: [exampleSchema],
+        default: [],
+        select: false, // Hidden from team-facing queries
+    },
     testCases: {
         type: Number,
         required: [true, 'Number of test cases is required'],
@@ -80,10 +85,6 @@ const questionSchema = new mongoose.Schema({
             default: '// Write your solution here\n',
         },
         java: {
-            type: String,
-            default: '// Write your solution here\n',
-        },
-        javascript: {
             type: String,
             default: '// Write your solution here\n',
         },

@@ -67,6 +67,20 @@ exports.validateQuestion = [
         .withMessage('At least one example is required'),
     body('examples.*.input').trim().notEmpty().withMessage('Example input is required'),
     body('examples.*.output').trim().notEmpty().withMessage('Example output is required'),
+    body('hiddenTestCases')
+        .optional()
+        .isArray()
+        .withMessage('Hidden test cases must be an array'),
+    body('hiddenTestCases.*.input')
+        .optional()
+        .trim()
+        .notEmpty()
+        .withMessage('Hidden test case input is required'),
+    body('hiddenTestCases.*.output')
+        .optional()
+        .trim()
+        .notEmpty()
+        .withMessage('Hidden test case output is required'),
     body('testCases')
         .isInt({ min: 1 })
         .withMessage('At least one test case is required'),

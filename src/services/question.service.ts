@@ -14,13 +14,17 @@ export interface Question {
         output: string;
         explanation?: string;
     }[];
+    hiddenTestCases?: {
+        input: string;
+        output: string;
+        explanation?: string;
+    }[];
     testCases: number;
     boilerplateCode?: {
         python?: string;
         c?: string;
         cpp?: string;
         java?: string;
-        javascript?: string;
     };
     createdBy?: {
         _id: string;
@@ -44,13 +48,17 @@ export interface CreateQuestionData {
         output: string;
         explanation?: string;
     }[];
+    hiddenTestCases?: {
+        input: string;
+        output: string;
+        explanation?: string;
+    }[];
     testCases: number;
     boilerplateCode?: {
         python?: string;
         c?: string;
         cpp?: string;
         java?: string;
-        javascript?: string;
     };
 }
 
