@@ -18,20 +18,15 @@ const initializeSocket = (socketIO) => {
 const isTeamActive = (teamId) => {
     const tid = teamId.toString();
     const activeSocketId = activeTeams.get(tid);
-    console.log(`Checking if team ${tid} is active. Found socket ID: ${activeSocketId}`);
 
     if (activeSocketId && io) {
         // Double check if the socket actually exists/is connected
         const socket = io.sockets.sockets.get(activeSocketId);
         if (socket && socket.connected) {
-            console.log(`Team ${tid} is active (socket ${activeSocketId} connected)`);
             return true;
         }
-        console.log(`Team ${tid} socket ${activeSocketId} found but not connected. Cleaning up.`);
         // If not connected, clean up
         activeTeams.delete(tid);
-    } else {
-        console.log(`Team ${tid} is not active (no socket or no io)`);
     }
     return false;
 };

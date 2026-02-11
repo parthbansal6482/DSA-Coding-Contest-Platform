@@ -78,20 +78,24 @@ io.on('connection', async (socket) => {
 // Connect to database
 connectDB();
 
-// Middleware
-const allowedOrigins = [
-    'https://dsa-coding-contest-platform.vercel.app',  // Production
-    'http://localhost:3000',                            // Local development
-    'http://localhost:5173',                            // Vite default port (if different)
-];
+// CORS configuration
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',')
+    : ['http://localhost:3000', 'http://localhost:5173'];
+
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+    console.error('CRITICAL: JWT_SECRET is not set in production environment!');
+}
+
 app.use(cors({
     origin: function (origin, callback) {
         // Allow requests with no origin (like mobile apps or curl)
         if (!origin) return callback(null, true);
 
-        if (allowedOrigins.indexOf(origin) !== -1) {
+        if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
             callback(null, true);
         } else {
+            console.warn(`CORS blocked request from origin: ${origin}`);
             callback(new Error('Not allowed by CORS'));
         }
     },
@@ -143,4 +147,8 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
     console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
     console.log(`WebSocket server ready on port ${PORT}`);
+
+    // Start background worker for code execution
+    const submissionQueue = require('./services/submissionQueue');
+    submissionQueue.start();
 });

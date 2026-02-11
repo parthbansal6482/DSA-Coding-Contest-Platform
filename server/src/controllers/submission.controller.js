@@ -2,8 +2,7 @@ const Submission = require('../models/Submission');
 const Question = require('../models/Question');
 const Round = require('../models/Round');
 const Team = require('../models/Team');
-const { runTestCases } = require('../services/execution.service');
-const { broadcastLeaderboardUpdate, broadcastTeamStatsUpdate, broadcastSubmissionUpdate } = require('../socket');
+const { broadcastSubmissionUpdate } = require('../socket');
 
 /**
  * Submit code for a question
@@ -66,9 +65,6 @@ exports.submitCode = async (req, res) => {
             totalTestCases: (question.examples?.length || 0) + (question.hiddenTestCases?.length || 0),
         });
 
-        // Run code asynchronously
-        runCodeAsync(submission._id, code, language, question, round);
-
         res.status(201).json({
             success: true,
             message: 'Submission received and being evaluated',
@@ -86,143 +82,6 @@ exports.submitCode = async (req, res) => {
         });
     }
 };
-
-/**
- * Run code asynchronously and update submission
- */
-async function runCodeAsync(submissionId, code, language, question, round) {
-    try {
-        // Prepare test cases - combine examples and hidden test cases
-        const visibleTestCases = question.examples.map(example => ({
-            input: example.input,
-            expectedOutput: example.output,
-        }));
-
-        const hiddenTestCases = (question.hiddenTestCases || []).map(testCase => ({
-            input: testCase.input,
-            expectedOutput: testCase.output,
-        }));
-
-        // Combine all test cases for evaluation
-        const testCases = [...visibleTestCases, ...hiddenTestCases];
-
-        // Run test cases
-        const result = await runTestCases(code, language, testCases);
-
-        // Determine status
-        let status = 'accepted';
-        if (result.passedTests === 0) {
-            status = 'wrong_answer';
-        } else if (result.passedTests < result.totalTests) {
-            status = 'wrong_answer';
-        }
-
-        // Check for errors
-        const hasErrors = result.results.some(r => r.error && r.error.includes('timeout'));
-        if (hasErrors) {
-            status = 'time_limit_exceeded';
-        }
-
-        const hasRuntimeErrors = result.results.some(r => r.error && !r.error.includes('timeout'));
-        if (hasRuntimeErrors && status !== 'time_limit_exceeded') {
-            status = 'runtime_error';
-        }
-
-        // Calculate points (proportional to passed tests)
-        const points = status === 'accepted'
-            ? question.points || 100
-            : Math.floor((result.passedTests / result.totalTests) * (question.points || 100));
-
-        // Get average execution time and max memory
-        const avgExecutionTime = result.results.reduce((sum, r) => sum + r.executionTime, 0) / result.results.length;
-        const maxMemory = Math.max(...result.results.map(r => r.memoryUsed));
-
-        // Update submission
-        const updatedSubmission = await Submission.findByIdAndUpdate(
-            submissionId,
-            {
-                status,
-                testCasesPassed: result.passedTests,
-                points,
-                executionTime: Math.round(avgExecutionTime),
-                memoryUsed: maxMemory,
-                testResults: result.results,
-            },
-            { new: true }
-        );
-
-        // Get team ID for broadcasting
-        const submission = await Submission.findById(submissionId);
-        const teamId = submission.team;
-
-        // If accepted, update team points and score
-        if (status === 'accepted') {
-            // Check if this is the first accepted submission for this question
-            const previousAccepted = await Submission.findOne({
-                team: teamId,
-                question: submission.question,
-                status: 'accepted',
-                _id: { $ne: submissionId },
-            });
-
-            if (!previousAccepted) {
-                // Refetch round to get most up-to-date startTime and duration
-                const freshRound = await Round.findById(round._id);
-                const startTime = freshRound?.startTime ? new Date(freshRound.startTime).getTime() : (round.startTime ? new Date(round.startTime).getTime() : Date.now());
-                const now = Date.now();
-                const totalDurationMs = (freshRound?.duration || round.duration || 60) * 60 * 1000;
-                const elapsedMs = Math.max(0, now - startTime);
-
-                console.log(`Debug Scoring: now=${now}, startTime=${startTime}, duration=${freshRound?.duration || round.duration}, totalDurationMs=${totalDurationMs}, elapsedMs=${elapsedMs}`);
-
-                let timeRemainingRatio = 1 - (elapsedMs / totalDurationMs);
-                timeRemainingRatio = Math.max(0.2, Math.min(1, timeRemainingRatio));
-
-                if (isNaN(timeRemainingRatio)) timeRemainingRatio = 0.5;
-
-                const basePoints = question.points || 100;
-                const currencyPoints = Math.floor(basePoints * timeRemainingRatio);
-
-                // Score = Also time-based for leaderboard
-                const scoreReward = Math.floor(basePoints * timeRemainingRatio);
-
-                console.log(`Scoring: timeRatio=${timeRemainingRatio.toFixed(2)}, points=${currencyPoints}, score=${scoreReward}`);
-
-                await Team.findByIdAndUpdate(teamId, {
-                    $inc: {
-                        points: currencyPoints || 0,
-                        score: scoreReward || 0
-                    },
-                });
-
-                console.log(`Team awarded ${scoreReward} score and ${currencyPoints} currency points for solving ${question.title}`);
-
-                // Broadcast leaderboard update
-                broadcastLeaderboardUpdate();
-
-                // Broadcast team stats update
-                broadcastTeamStatsUpdate(teamId);
-            }
-        }
-
-        // Broadcast submission update to the team
-        broadcastSubmissionUpdate(teamId, {
-            question: submission.question,
-            status,
-            points,
-            submittedAt: submission.submittedAt,
-        });
-
-    } catch (error) {
-        console.error('Code execution error:', error);
-
-        // Update submission with error
-        await Submission.findByIdAndUpdate(submissionId, {
-            status: 'runtime_error',
-            error: error.message,
-        });
-    }
-}
 
 /**
  * Get submission by ID
