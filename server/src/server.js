@@ -22,6 +22,7 @@ const statsRoutes = require('./routes/stats.routes');
 const questionRoutes = require('./routes/question.routes');
 const roundRoutes = require('./routes/round.routes');
 const submissionRoutes = require('./routes/submission.routes');
+const dualityRoutes = require('./routes/duality.routes');
 
 // Initialize express app
 const app = express();
@@ -114,6 +115,7 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/questions', questionRoutes);
 app.use('/api/rounds', roundRoutes);
 app.use('/api/submissions', submissionRoutes);
+app.use('/api/duality', dualityRoutes);
 
 // Health check route
 app.get('/api/health', (req, res) => {

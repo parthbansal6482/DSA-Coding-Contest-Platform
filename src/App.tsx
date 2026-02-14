@@ -4,14 +4,19 @@ import { TeamAuth } from './components/TeamAuth';
 import { AdminDashboard } from './components/AdminDashboard';
 import { TeamDashboard } from './components/TeamDashboard';
 import { RoundPage } from './components/RoundPage';
+import { ProjectSelection } from './components/ProjectSelection';
+import { DualityAuth } from './components/DualityAuth';
 import { Shield, Users } from 'lucide-react';
 
-type UserType = 'admin' | 'team';
+type UserType = 'admin' | 'team' | 'duality-user';
+type ProjectType = 'extended' | 'duality' | null;
 
 export default function App() {
+  const [project, setProject] = useState<ProjectType>(null);
   const [userType, setUserType] = useState<UserType>('team');
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [isTeamLoggedIn, setIsTeamLoggedIn] = useState(false);
+  const [isDualityLoggedIn, setIsDualityLoggedIn] = useState(false);
   const [activeRoundId, setActiveRoundId] = useState<string | null>(null);
 
   // Check for existing login on mount
@@ -23,19 +28,65 @@ export default function App() {
       if (storedUserType === 'admin') {
         setIsAdminLoggedIn(true);
         setUserType('admin');
+        setProject('extended');
       } else if (storedUserType === 'team') {
         setIsTeamLoggedIn(true);
         setUserType('team');
+        setProject('extended');
+      } else if (storedUserType === 'duality-user') {
+        setIsDualityLoggedIn(true);
+        setUserType('duality-user');
+        setProject('duality');
       }
     }
   }, []);
 
-  // Show admin dashboard if logged in as admin
+  // Handle Logout (Generic)
+  const handleLogout = () => {
+    localStorage.clear();
+    setIsAdminLoggedIn(false);
+    setIsTeamLoggedIn(false);
+    setIsDualityLoggedIn(false);
+    setProject(null);
+  };
+
+  // 1. Selection Page
+  if (!project) {
+    return <ProjectSelection onSelect={setProject} />;
+  }
+
+  // 2. Duality Path
+  if (project === 'duality') {
+    if (isDualityLoggedIn) {
+      return (
+        <div className="min-h-screen bg-black text-white p-8 flex flex-col items-center justify-center">
+          <h1 className="text-4xl font-bold mb-4">Duality Dashboard</h1>
+          <p className="text-zinc-400 mb-8">Welcome to the LeetCode-style practice section!</p>
+          <div className="bg-zinc-900 border border-zinc-800 p-12 rounded-3xl text-center max-w-lg">
+            <p className="text-zinc-500 mb-6">This section is under development. Soon you will see problems here.</p>
+            <button
+              onClick={handleLogout}
+              className="bg-white text-black px-6 py-2 rounded-lg font-medium hover:bg-zinc-200 transition-colors"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <DualityAuth
+        onLogin={() => setIsDualityLoggedIn(true)}
+        onBack={() => setProject(null)}
+      />
+    );
+  }
+
+  // 3. Duality Extended Path
   if (isAdminLoggedIn) {
     return <AdminDashboard />;
   }
 
-  // Show round page if team entered a round
   if (isTeamLoggedIn && activeRoundId) {
     return (
       <RoundPage
@@ -45,7 +96,6 @@ export default function App() {
     );
   }
 
-  // Show team dashboard if logged in as team
   if (isTeamLoggedIn) {
     return (
       <TeamDashboard
@@ -55,8 +105,15 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-4">
+    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-2xl">
+        <button
+          onClick={() => setProject(null)}
+          className="text-zinc-500 hover:text-white mb-6 flex items-center gap-2 transition-colors"
+        >
+          ← Back to selection
+        </button>
+
         {/* User Type Selector */}
         <div className="flex gap-4 mb-8">
           <button
