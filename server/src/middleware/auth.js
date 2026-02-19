@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
-const Admin = require('../models/Admin');
-const Team = require('../models/Team');
+const Admin = require('../models/extended/Admin');
+const Team = require('../models/extended/Team');
 
 // Protect routes - verify JWT token
 exports.protect = async (req, res, next) => {

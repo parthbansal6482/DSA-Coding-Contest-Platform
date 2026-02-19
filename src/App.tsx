@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { AdminAuth } from './components/AdminAuth';
-import { TeamAuth } from './components/TeamAuth';
-import { AdminDashboard } from './components/AdminDashboard';
-import { TeamDashboard } from './components/TeamDashboard';
-import { RoundPage } from './components/RoundPage';
-import { ProjectSelection } from './components/ProjectSelection';
-import { DualityAuth } from './components/DualityAuth';
-import { Shield, Users } from 'lucide-react';
+import { AdminAuth } from './components/extended/AdminAuth';
+import { TeamAuth } from './components/extended/TeamAuth';
+import { AdminDashboard } from './components/extended/AdminDashboard';
+import { TeamDashboard } from './components/extended/TeamDashboard';
+import { RoundPage } from './components/extended/RoundPage';
+import { ProjectSelection } from './components/common/ProjectSelection';
+import { DualityAuth } from './components/duality/DualityAuth';
+import { Shield, Users, ArrowLeft } from 'lucide-react';
 
 type UserType = 'admin' | 'team' | 'duality-user';
 type ProjectType = 'extended' | 'duality' | null;
@@ -64,12 +64,21 @@ export default function App() {
           <p className="text-zinc-400 mb-8">Welcome to the LeetCode-style practice section!</p>
           <div className="bg-zinc-900 border border-zinc-800 p-12 rounded-3xl text-center max-w-lg">
             <p className="text-zinc-500 mb-6">This section is under development. Soon you will see problems here.</p>
-            <button
-              onClick={handleLogout}
-              className="bg-white text-black px-6 py-2 rounded-lg font-medium hover:bg-zinc-200 transition-colors"
-            >
-              Logout
-            </button>
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={() => setProject(null)}
+                className="bg-zinc-800 text-white px-6 py-2 rounded-lg font-medium hover:bg-zinc-700 transition-colors flex items-center gap-2 group"
+              >
+                <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
+                Back to Selection
+              </button>
+              <button
+                onClick={handleLogout}
+                className="bg-white text-black px-6 py-2 rounded-lg font-medium hover:bg-zinc-200 transition-colors"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       );
@@ -84,7 +93,12 @@ export default function App() {
 
   // 3. Duality Extended Path
   if (isAdminLoggedIn) {
-    return <AdminDashboard />;
+    return (
+      <AdminDashboard
+        onBack={() => setProject(null)}
+        onLogout={handleLogout}
+      />
+    );
   }
 
   if (isTeamLoggedIn && activeRoundId) {
@@ -100,6 +114,8 @@ export default function App() {
     return (
       <TeamDashboard
         onEnterRound={(roundId: string) => setActiveRoundId(roundId)}
+        onBack={() => setProject(null)}
+        onLogout={handleLogout}
       />
     );
   }
@@ -109,9 +125,10 @@ export default function App() {
       <div className="w-full max-w-2xl">
         <button
           onClick={() => setProject(null)}
-          className="text-zinc-500 hover:text-white mb-6 flex items-center gap-2 transition-colors"
+          className="flex items-center gap-2 text-white hover:text-white mb-8 transition-colors group"
         >
-          ← Back to selection
+          <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
+          Back to Selection
         </button>
 
         {/* User Type Selector */}

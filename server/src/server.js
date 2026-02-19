@@ -15,14 +15,14 @@ const {
 const { verifyToken } = require('./utils/jwt');
 
 // Import routes
-const adminRoutes = require('./routes/admin.routes');
-const teamRoutes = require('./routes/team.routes');
-const teamManagementRoutes = require('./routes/teamManagement.routes');
-const statsRoutes = require('./routes/stats.routes');
-const questionRoutes = require('./routes/question.routes');
-const roundRoutes = require('./routes/round.routes');
-const submissionRoutes = require('./routes/submission.routes');
-const dualityRoutes = require('./routes/duality.routes');
+const adminRoutes = require('./routes/extended/admin.routes');
+const teamRoutes = require('./routes/extended/team.routes');
+const teamManagementRoutes = require('./routes/extended/teamManagement.routes');
+const statsRoutes = require('./routes/extended/stats.routes');
+const questionRoutes = require('./routes/extended/question.routes');
+const roundRoutes = require('./routes/extended/round.routes');
+const submissionRoutes = require('./routes/extended/submission.routes');
+const dualityRoutes = require('./routes/duality/duality.routes');
 
 // Initialize express app
 const app = express();

@@ -1,4 +1,4 @@
-const Team = require('./models/Team');
+const Team = require('./models/extended/Team');
 
 let io = null;
 const activeTeams = new Map(); // teamId -> socketId

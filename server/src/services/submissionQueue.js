@@ -1,7 +1,7 @@
-const Submission = require('../models/Submission');
-const Question = require('../models/Question');
-const Round = require('../models/Round');
-const Team = require('../models/Team');
+const Submission = require('../models/extended/Submission');
+const Question = require('../models/extended/Question');
+const Round = require('../models/extended/Round');
+const Team = require('../models/extended/Team');
 const { runTestCases } = require('./execution.service');
 const {
     broadcastLeaderboardUpdate,
