@@ -11,12 +11,12 @@ const {
     activateShield,
     launchSabotage,
 } = require('../../controllers/extended/team.controller');
-const { protect, teamOnly } = require('../../middleware/auth');
+const { protect, teamOnly } = require('../../middleware/extended/auth');
 const {
     teamRegisterRules,
     teamLoginRules,
     validate,
-} = require('../../middleware/validation');
+} = require('../../middleware/common/validation');
 
 // Public routes
 router.post('/register', teamRegisterRules, validate, register);

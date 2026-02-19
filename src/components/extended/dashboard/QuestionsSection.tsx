@@ -7,7 +7,7 @@ import {
   deleteQuestion,
   Question as APIQuestion,
   CreateQuestionData,
-} from '../../../services/question.service';
+} from '../../../services/common/question.service';
 
 interface Question {
   _id: string;

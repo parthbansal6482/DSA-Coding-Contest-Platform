@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Search, Check, X, Eye, Users as UsersIcon, Mail } from 'lucide-react';
-import { getAllTeams, approveTeam, rejectTeam } from '../../../services/team.service';
-import { socketService } from '../../../services/socket.service';
-import { LeaderboardTeam } from '../../../services/team.service';
+import { getAllTeams, approveTeam, rejectTeam } from '../../../services/extended/team.service';
+import { socketService } from '../../../services/common/socket.service';
+import { LeaderboardTeam } from '../../../services/extended/team.service';
 
 interface Member {
   name: string;

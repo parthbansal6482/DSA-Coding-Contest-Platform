@@ -151,6 +151,6 @@ server.listen(PORT, () => {
     console.log(`WebSocket server ready on port ${PORT}`);
 
     // Start background worker for code execution
-    const submissionQueue = require('./services/submissionQueue');
+    const submissionQueue = require('./services/extended/submissionQueue');
     submissionQueue.start();
 });

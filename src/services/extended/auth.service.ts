@@ -1,4 +1,4 @@
-import api from './api';
+import api from '../common/api';
 
 interface AdminSignupData {
     name: string;

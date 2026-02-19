@@ -7,8 +7,8 @@ const {
     updateQuestion,
     deleteQuestion,
 } = require('../../controllers/extended/question.controller');
-const { protect, adminOnly } = require('../../middleware/auth');
-const { validateQuestion } = require('../../middleware/validation');
+const { protect, adminOnly } = require('../../middleware/extended/auth');
+const { validateQuestion } = require('../../middleware/common/validation');
 
 // All routes require admin authentication
 router.use(protect);

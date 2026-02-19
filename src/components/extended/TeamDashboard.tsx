@@ -16,8 +16,8 @@ import { Leaderboard } from './team-dashboard/Leaderboard';
 import { ActiveRounds } from './team-dashboard/ActiveRounds';
 import { TokenShop } from './team-dashboard/TokenShop';
 import { SabotagePanel } from './team-dashboard/SabotagePanel';
-import { getTeamStats, TeamStats, purchaseToken, getLeaderboard, LeaderboardTeam, activateShield, launchSabotage } from '../../services/team.service';
-import { socketService } from '../../services/socket.service';
+import { getTeamStats, TeamStats, purchaseToken, getLeaderboard, LeaderboardTeam, activateShield, launchSabotage } from '../../services/extended/team.service';
+import { socketService } from '../../services/common/socket.service';
 
 type Section = 'home' | 'leaderboard' | 'rounds' | 'shop' | 'tactics';
 

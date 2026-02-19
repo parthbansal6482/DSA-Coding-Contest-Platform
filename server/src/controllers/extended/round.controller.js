@@ -231,7 +231,7 @@ const runCode = async (req, res) => {
         }
 
         // Run code against sample test cases (examples only, not hidden test cases)
-        const { runTestCases } = require('../services/execution.service');
+        const { runTestCases } = require('../../services/common/execution.service');
 
         const testCases = question.examples.map(example => ({
             input: example.input,
@@ -268,7 +268,7 @@ const runCode = async (req, res) => {
  * @access  Private/Team
  */
 const submitSolution = async (req, res) => {
-    const { runTestCases } = require('../services/execution.service');
+    const { runTestCases } = require('../../services/common/execution.service');
 
     try {
         console.log('=== SUBMISSION REQUEST ===');
@@ -479,7 +479,7 @@ const submitSolution = async (req, res) => {
  * Run code asynchronously and update submission
  */
 async function runCodeAsync(submissionId, code, language, question, teamId) {
-    const { runTestCases } = require('../services/execution.service');
+    const { runTestCases } = require('../../services/common/execution.service');
 
     try {
         // Prepare test cases - combine examples and hidden test cases

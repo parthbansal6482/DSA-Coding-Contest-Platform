@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Clock, Play, Lock, CheckCircle, AlertCircle } from 'lucide-react';
-import { getActiveRounds } from '../../../services/round.service';
+import { getActiveRounds } from '../../../services/extended/round.service';
 
 interface Round {
   _id: string;

@@ -15,7 +15,7 @@ import { RoundsSection } from './dashboard/RoundsSection';
 import { TeamsSection } from './dashboard/TeamsSection';
 import { RoundControlSection } from './dashboard/RoundControlSection';
 import { CheatingAlertsList } from './dashboard/CheatingAlertsList';
-import { socketService } from '../../services/socket.service';
+import { socketService } from '../../services/common/socket.service';
 
 type Section = 'overview' | 'questions' | 'rounds' | 'teams' | 'control';
 
@@ -154,7 +154,7 @@ function OverviewSection({ onNavigate }: { onNavigate: (section: Section) => voi
   const fetchStats = async () => {
     try {
       setLoading(true);
-      const { getOverviewStats } = await import('../../services/stats.service');
+      const { getOverviewStats } = await import('../../services/extended/stats.service');
       const data = await getOverviewStats();
       setStats({
         totalTeams: data.totalTeams,
@@ -173,7 +173,7 @@ function OverviewSection({ onNavigate }: { onNavigate: (section: Section) => voi
 
   const fetchActivities = async () => {
     try {
-      const { getRecentActivity } = await import('../../services/stats.service');
+      const { getRecentActivity } = await import('../../services/extended/stats.service');
       const data = await getRecentActivity(5);
       setActivities(data);
     } catch (err) {

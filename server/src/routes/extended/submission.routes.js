@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const submissionController = require('../../controllers/extended/submission.controller');
-const { protect, teamOnly } = require('../../middleware/auth');
+const { protect, teamOnly } = require('../../middleware/extended/auth');
 
 // All routes require team authentication
 router.use(protect);

@@ -1,4 +1,4 @@
-import api from './api';
+import api from '../common/api';
 
 export interface Round {
     _id: string;

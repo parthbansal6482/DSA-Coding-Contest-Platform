@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Users, Award, Target, Clock } from 'lucide-react';
-import { getTeamActivity, TeamActivity, TeamStats } from '../../../services/team.service';
+import { getTeamActivity, TeamActivity, TeamStats } from '../../../services/extended/team.service';
 
 export function DashboardHome({ teamData }: { teamData: TeamStats }) {
   const [activities, setActivities] = useState<TeamActivity[]>([]);

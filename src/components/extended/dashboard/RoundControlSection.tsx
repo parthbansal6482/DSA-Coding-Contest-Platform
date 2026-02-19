@@ -4,9 +4,9 @@ import {
   getAllRounds,
   updateRoundStatus,
   Round as APIRound,
-} from '../../../services/round.service';
-import { getAllTeams, toggleDisqualification } from '../../../services/team.service';
-import { socketService, CheatingAlert } from '../../../services/socket.service';
+} from '../../../services/extended/round.service';
+import { getAllTeams, toggleDisqualification } from '../../../services/extended/team.service';
+import { socketService, CheatingAlert } from '../../../services/common/socket.service';
 
 interface Round {
   _id: string;

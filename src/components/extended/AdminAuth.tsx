@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
-import { adminLogin } from '../../services/auth.service';
+import { adminLogin } from '../../services/extended/auth.service';
 
 export function AdminAuth({ onLogin }: { onLogin: () => void }) {
   const [showPassword, setShowPassword] = useState(false);

@@ -6,7 +6,7 @@ const {
     rejectTeam,
     toggleDisqualification,
 } = require('../../controllers/extended/teamManagement.controller');
-const { protect, adminOnly } = require('../../middleware/auth');
+const { protect, adminOnly } = require('../../middleware/extended/auth');
 
 // All routes are admin-only
 router.use(protect, adminOnly);

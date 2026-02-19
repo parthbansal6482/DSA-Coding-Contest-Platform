@@ -1,13 +1,13 @@
-const Submission = require('../models/extended/Submission');
-const Question = require('../models/extended/Question');
-const Round = require('../models/extended/Round');
-const Team = require('../models/extended/Team');
-const { runTestCases } = require('./execution.service');
+const Submission = require('../../models/extended/Submission');
+const Question = require('../../models/extended/Question');
+const Round = require('../../models/extended/Round');
+const Team = require('../../models/extended/Team');
+const { runTestCases } = require('../common/execution.service');
 const {
     broadcastLeaderboardUpdate,
     broadcastTeamStatsUpdate,
     broadcastSubmissionUpdate
-} = require('../socket');
+} = require('../../socket');
 
 class SubmissionQueue {
     constructor() {

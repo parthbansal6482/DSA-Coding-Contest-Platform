@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle, Clock, Layers } from 'lucide-react';
-import { socketService, CheatingAlert } from '../../../services/socket.service';
+import { socketService, CheatingAlert } from '../../../services/common/socket.service';
 
 export function CheatingAlertsList() {
     const [alerts, setAlerts] = useState<CheatingAlert[]>([]);

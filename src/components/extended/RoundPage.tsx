@@ -4,9 +4,9 @@ import { QuestionList } from './round-page/QuestionList';
 import { ProblemView } from './round-page/ProblemView';
 import { TacticalPanel } from './round-page/TacticalPanel';
 import { SabotageEffects } from './round-page/SabotageEffects';
-import { getRoundQuestions, exitRound, completeRound } from '../../services/round.service';
-import { getTeamStats, purchaseToken, getLeaderboard, LeaderboardTeam, launchSabotage, activateShield } from '../../services/team.service';
-import { socketService, TeamStatsUpdate, SubmissionUpdate, DisqualificationUpdate, RoundUpdate } from '../../services/socket.service';
+import { getRoundQuestions, exitRound, completeRound } from '../../services/extended/round.service';
+import { getTeamStats, purchaseToken, getLeaderboard, LeaderboardTeam, launchSabotage, activateShield } from '../../services/extended/team.service';
+import { socketService, TeamStatsUpdate, SubmissionUpdate, DisqualificationUpdate, RoundUpdate } from '../../services/common/socket.service';
 
 interface Question {
   _id: string;

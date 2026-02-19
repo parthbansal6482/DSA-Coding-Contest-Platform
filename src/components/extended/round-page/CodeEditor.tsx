@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Play, Send, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { MonacoCodeEditor } from './MonacoCodeEditor';
-import { runCode, submitSolution } from '../../../services/round.service';
+import { runCode, submitSolution } from '../../../services/extended/round.service';
 
 interface Question {
   _id: string;  // MongoDB ID

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Eye, EyeOff, Mail, Lock, Users as UsersIcon } from 'lucide-react';
-import { teamRegister, teamLogin } from '../../services/auth.service';
+import { teamRegister, teamLogin } from '../../services/extended/auth.service';
 
 interface Member {
   name: string;
@@ -171,16 +171,6 @@ export function TeamAuth({ onLogin }: { onLogin: () => void }) {
                 {error}
               </div>
             )}
-
-            {/* Forgot Password */}
-            <div className="flex justify-end">
-              <button
-                type="button"
-                className="text-sm text-gray-400 hover:text-white transition-colors"
-              >
-                Forgot password?
-              </button>
-            </div>
 
             {/* Submit Button */}
             <button

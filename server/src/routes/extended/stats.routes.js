@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getOverviewStats, getRecentActivity } = require('../../controllers/extended/stats.controller');
-const { protect, adminOnly } = require('../../middleware/auth');
+const { protect, adminOnly } = require('../../middleware/extended/auth');
 
 // All routes require admin authentication
 router.use(protect);

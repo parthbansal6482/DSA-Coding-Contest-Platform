@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Trophy, Medal, Award } from 'lucide-react';
-import { getLeaderboard, LeaderboardTeam } from '../../../services/team.service';
-import { socketService } from '../../../services/socket.service';
+import { getLeaderboard, LeaderboardTeam } from '../../../services/extended/team.service';
+import { socketService } from '../../../services/common/socket.service';
 
 export function Leaderboard({ currentTeam }: { currentTeam: string }) {
   const [teams, setTeams] = useState<LeaderboardTeam[]>([]);

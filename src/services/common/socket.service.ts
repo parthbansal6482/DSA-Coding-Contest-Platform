@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import { LeaderboardTeam } from './team.service';
+import { LeaderboardTeam } from '../extended/team.service';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const SOCKET_URL = API_URL.replace('/api', '');

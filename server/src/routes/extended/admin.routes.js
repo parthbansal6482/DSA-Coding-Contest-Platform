@@ -5,12 +5,12 @@ const {
     login,
     getProfile,
 } = require('../../controllers/extended/admin.controller');
-const { protect, adminOnly } = require('../../middleware/auth');
+const { protect, adminOnly } = require('../../middleware/extended/auth');
 const {
     adminSignupRules,
     adminLoginRules,
     validate,
-} = require('../../middleware/validation');
+} = require('../../middleware/common/validation');
 
 // Public routes
 router.post('/signup', adminSignupRules, validate, signup);

@@ -7,8 +7,8 @@ import {
   deleteRound,
   Round as APIRound,
   CreateRoundData,
-} from '../../../services/round.service';
-import { getAllQuestions } from '../../../services/question.service';
+} from '../../../services/extended/round.service';
+import { getAllQuestions } from '../../../services/common/question.service';
 
 interface Round {
   _id: string;

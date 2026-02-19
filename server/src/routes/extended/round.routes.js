@@ -15,8 +15,8 @@ const {
     exitRound,
     completeRound,
 } = require('../../controllers/extended/round.controller');
-const { protect, adminOnly, teamOnly } = require('../../middleware/auth');
-const { validateRound } = require('../../middleware/validation');
+const { protect, adminOnly, teamOnly } = require('../../middleware/extended/auth');
+const { validateRound } = require('../../middleware/common/validation');
 
 // Team routes - must come before admin routes to avoid conflicts
 // @route   GET /api/rounds/active
