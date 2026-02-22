@@ -4,13 +4,16 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const connectDB = require('./config/database');
+const { connectPracticeDB } = require('./config/practiceDatabase');
 const {
     initializeSocket,
     getLeaderboardData,
     broadcastCheatingViolation,
     isTeamActive,
     addActiveTeam,
-    removeActiveTeam
+    removeActiveTeam,
+    addDualityUser,
+    removeDualityUser,
 } = require('./socket');
 const { verifyToken } = require('./utils/jwt');
 
@@ -22,6 +25,12 @@ const statsRoutes = require('./routes/stats.routes');
 const questionRoutes = require('./routes/question.routes');
 const roundRoutes = require('./routes/round.routes');
 const submissionRoutes = require('./routes/submission.routes');
+
+// Duality routes
+const dualityAuthRoutes = require('./routes/duality/dualityAuth.routes');
+const dualityAllowedEmailRoutes = require('./routes/duality/dualityAllowedEmail.routes');
+const dualityQuestionRoutes = require('./routes/duality/dualityQuestion.routes');
+const dualitySubmissionRoutes = require('./routes/duality/dualitySubmission.routes');
 
 // Initialize express app
 const app = express();
@@ -69,14 +78,28 @@ io.on('connection', async (socket) => {
         broadcastCheatingViolation(teamName, roundName, violationType, action, duration);
     });
 
+    // Duality user authentication
+    socket.on('duality:authenticate', (token) => {
+        try {
+            const decoded = require('jsonwebtoken').verify(token, process.env.JWT_SECRET);
+            if (decoded && decoded.type === 'duality') {
+                addDualityUser(decoded.id, socket.id);
+            }
+        } catch (error) {
+            console.error('Duality socket authentication error:', error);
+        }
+    });
+
     socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);
         removeActiveTeam(socket.id);
+        removeDualityUser(socket.id);
     });
 });
 
-// Connect to database
+// Connect to databases
 connectDB();
+connectPracticeDB();
 
 // CORS configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS
@@ -106,7 +129,7 @@ app.options("*", cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Routes
+// Routes — Extended
 app.use('/api/admin', adminRoutes);
 app.use('/api/team', teamRoutes);
 app.use('/api/teams', teamManagementRoutes);
@@ -114,6 +137,12 @@ app.use('/api/stats', statsRoutes);
 app.use('/api/questions', questionRoutes);
 app.use('/api/rounds', roundRoutes);
 app.use('/api/submissions', submissionRoutes);
+
+// Routes — Duality Practice
+app.use('/api/duality/auth', dualityAuthRoutes);
+app.use('/api/duality/allowed-emails', dualityAllowedEmailRoutes);
+app.use('/api/duality/questions', dualityQuestionRoutes);
+app.use('/api/duality/submissions', dualitySubmissionRoutes);
 
 // Health check route
 app.get('/api/health', (req, res) => {
@@ -148,7 +177,10 @@ server.listen(PORT, () => {
     console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
     console.log(`WebSocket server ready on port ${PORT}`);
 
-    // Start background worker for code execution
+    // Start background workers for code execution
     const submissionQueue = require('./services/submissionQueue');
     submissionQueue.start();
+
+    const dualitySubmissionQueue = require('./services/dualitySubmissionQueue');
+    dualitySubmissionQueue.start();
 });

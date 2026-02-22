@@ -1,0 +1,177 @@
+const getDualitySubmission = require('../../models/duality/DualitySubmission');
+const getDualityQuestion = require('../../models/duality/DualityQuestion');
+const { runTestCases } = require('../../services/execution.service');
+
+/**
+ * Submit code for a question
+ * POST /api/duality/submissions
+ */
+exports.submitCode = async (req, res) => {
+    try {
+        const { questionId, code, language } = req.body;
+        const userId = req.dualityUser._id;
+
+        if (!questionId || !code || !language) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields: questionId, code, language',
+            });
+        }
+
+        const DualityQuestion = getDualityQuestion();
+        const question = await DualityQuestion.findById(questionId);
+
+        if (!question) {
+            return res.status(404).json({ success: false, message: 'Question not found' });
+        }
+
+        const DualitySubmission = getDualitySubmission();
+        const submission = await DualitySubmission.create({
+            user: userId,
+            question: questionId,
+            code,
+            language,
+            status: 'pending',
+            totalTestCases: question.testCases.length,
+        });
+
+        res.status(201).json({
+            success: true,
+            message: 'Submission received and being evaluated',
+            data: {
+                submissionId: submission._id,
+                status: 'pending',
+            },
+        });
+    } catch (error) {
+        console.error('Submission error:', error);
+        res.status(500).json({ success: false, message: 'Error processing submission', error: error.message });
+    }
+};
+
+/**
+ * Run code against test cases without saving a submission
+ * POST /api/duality/submissions/run
+ */
+exports.runCode = async (req, res) => {
+    try {
+        const { questionId, code, language } = req.body;
+
+        if (!questionId || !code || !language) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields: questionId, code, language',
+            });
+        }
+
+        const DualityQuestion = getDualityQuestion();
+        const question = await DualityQuestion.findById(questionId);
+
+        if (!question) {
+            return res.status(404).json({ success: false, message: 'Question not found' });
+        }
+
+        let testCasesToRun = [];
+
+        // For non-admins, only run against public examples, not hidden testCases
+        if (req.dualityUser?.role === 'admin' && question.testCases && question.testCases.length > 0) {
+            testCasesToRun = question.testCases.map((tc, index) => ({
+                input: tc.input,
+                expectedOutput: tc.output,
+                id: index
+            }));
+        } else {
+            testCasesToRun = question.examples.map((ex, index) => ({
+                input: ex.input,
+                expectedOutput: ex.output,
+                id: index
+            }));
+        }
+
+        // Execute code
+        const result = await runTestCases(code, language, testCasesToRun);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                totalTests: result.totalTests,
+                passedTests: result.passedTests,
+                results: result.results.map(r => ({
+                    passed: r.passed,
+                    input: r.input,
+                    expectedOutput: r.expectedOutput,
+                    actualOutput: r.actualOutput,
+                    error: r.error
+                }))
+            }
+        });
+    } catch (error) {
+        console.error('Run code error:', error);
+        res.status(500).json({ success: false, message: 'Error running code', error: error.message });
+    }
+};
+
+/**
+ * Get submission by ID
+ * GET /api/duality/submissions/:id
+ */
+exports.getSubmission = async (req, res) => {
+    try {
+        const DualitySubmission = getDualitySubmission();
+        const submission = await DualitySubmission.findById(req.params.id)
+            .populate('question', 'title difficulty category');
+
+        if (!submission) {
+            return res.status(404).json({ success: false, message: 'Submission not found' });
+        }
+
+        // Access control: user can only see their own submissions
+        if (req.dualityUser.role !== 'admin' && submission.user.toString() !== req.dualityUser._id.toString()) {
+            return res.status(403).json({ success: false, message: 'Access denied' });
+        }
+
+        res.status(200).json({ success: true, data: submission });
+    } catch (error) {
+        console.error('Get submission error:', error);
+        res.status(500).json({ success: false, message: 'Error fetching submission', error: error.message });
+    }
+};
+
+/**
+ * Get all submissions for the logged-in user
+ * GET /api/duality/submissions/user/me
+ */
+exports.getUserSubmissions = async (req, res) => {
+    try {
+        const DualitySubmission = getDualitySubmission();
+        const submissions = await DualitySubmission.find({ user: req.dualityUser._id })
+            .populate('question', 'title difficulty category')
+            .sort({ submittedAt: -1 });
+
+        res.status(200).json({ success: true, data: submissions });
+    } catch (error) {
+        console.error('Get user submissions error:', error);
+        res.status(500).json({ success: false, message: 'Error fetching submissions', error: error.message });
+    }
+};
+
+/**
+ * Get submissions for a specific question by the logged-in user
+ * GET /api/duality/submissions/question/:questionId
+ */
+exports.getQuestionSubmissions = async (req, res) => {
+    try {
+        const DualitySubmission = getDualitySubmission();
+        const submissions = await DualitySubmission.find({
+            user: req.dualityUser._id,
+            question: req.params.questionId,
+        })
+            .populate('question', 'title difficulty category')
+            .sort({ submittedAt: -1 });
+
+        res.status(200).json({ success: true, data: submissions });
+    } catch (error) {
+        console.error('Get question submissions error:', error);
+        res.status(500).json({ success: false, message: 'Error fetching submissions', error: error.message });
+    }
+};
