@@ -24,8 +24,10 @@ import {
   getDualityQuestions,
   createDualityQuestion,
   updateDualityQuestion,
-  deleteDualityQuestion
+  deleteDualityQuestion,
+  getDualityUsers
 } from '../../services/duality.service';
+import dualitySocketService from '../../services/dualitySocket.service';
 
 interface Question {
   _id: string;
@@ -49,14 +51,11 @@ interface Student {
   mediumSolved: number;
   hardSolved: number;
   streak: number;
-  lastActive: string;
+  lastActiveDate: string;
   rank: number;
 }
 
-// Mock data for initial UI (though we will replace questions with real ones on mount)
-const mockStudents: Student[] = [
-  { id: '1', name: 'Alice Johnson', email: 'alice@example.com', joinDate: '2026-01-15', totalSolved: 45, easySolved: 20, mediumSolved: 18, hardSolved: 7, streak: 12, lastActive: '2026-02-22', rank: 1247 },
-];
+
 
 type ActiveTab = 'questions' | 'students';
 
@@ -70,7 +69,7 @@ export function AdminDashboard({
   const [activeTab, setActiveTab] = useState<ActiveTab>('questions');
   const [questions, setQuestions] = useState<Question[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [students] = useState<Student[]>(mockStudents);
+  const [students, setStudents] = useState<Student[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [viewingStudent, setViewingStudent] = useState<Student | null>(null);
@@ -105,8 +104,38 @@ export function AdminDashboard({
     }
   };
 
+  const fetchStudents = async () => {
+    try {
+      const result = await getDualityUsers();
+      if (result.success) {
+        // Add rank based on sorted list
+        const studentsWithRank = result.data.map((s: any, index: number) => ({
+          ...s,
+          rank: index + 1
+        }));
+        setStudents(studentsWithRank);
+      }
+    } catch (error) {
+      console.error('Error fetching students:', error);
+    }
+  };
+
   useEffect(() => {
     fetchQuestions();
+    fetchStudents();
+
+    // Listen for socket updates
+    dualitySocketService.onSubmissionUpdate(() => {
+      fetchStudents();
+    });
+
+    dualitySocketService.onQuestionUpdate(() => {
+      fetchQuestions();
+    });
+
+    return () => {
+      // socket cleanups if necessary (currently dualitySocketService uses shared listeners)
+    };
   }, []);
 
   const handleAddQuestion = async () => {
@@ -454,7 +483,7 @@ export function AdminDashboard({
                   <div>
                     <p className="text-xs text-gray-500">Active Today</p>
                     <p className="text-2xl font-bold text-green-500">
-                      {students.filter(s => s.lastActive === '2026-02-22').length}
+                      {students.filter(s => s.lastActiveDate && s.lastActiveDate.startsWith(new Date().toISOString().split('T')[0])).length}
                     </p>
                   </div>
                 </div>
@@ -539,7 +568,7 @@ export function AdminDashboard({
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="text-sm text-gray-400">{student.lastActive}</span>
+                          <span className="text-gray-400">Active {new Date(student.lastActiveDate).toLocaleDateString()}</span>
                         </td>
                         <td className="px-6 py-4">
                           <button
@@ -898,7 +927,7 @@ export function AdminDashboard({
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Last Active</span>
-                    <span className="text-white">{viewingStudent.lastActive}</span>
+                    <span className="text-white">Active {new Date(viewingStudent.lastActiveDate).toLocaleDateString()}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Account Created</span>

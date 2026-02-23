@@ -166,10 +166,46 @@ exports.getMe = async (req, res) => {
             },
         });
     } catch (error) {
-        console.error('Get profile error:', error);
+        console.error('Get me error:', error);
         res.status(500).json({
             success: false,
-            message: 'Error fetching profile',
+            message: 'Error fetching user profile',
+            error: error.message,
+        });
+    }
+};
+
+/**
+ * Get all users (Admin only)
+ * GET /api/duality/auth/users
+ */
+exports.getAllUsers = async (req, res) => {
+    try {
+        const DualityUser = getDualityUser();
+        const users = await DualityUser.find({}).sort({ totalSolved: -1 });
+
+        res.status(200).json({
+            success: true,
+            data: users.map(user => ({
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                avatar: user.avatar,
+                role: user.role,
+                totalSolved: user.totalSolved,
+                easySolved: user.easySolved,
+                mediumSolved: user.mediumSolved,
+                hardSolved: user.hardSolved,
+                streak: user.streak,
+                joinDate: user.joinDate,
+                lastActiveDate: user.lastActiveDate,
+            })),
+        });
+    } catch (error) {
+        console.error('Get all users error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching users',
             error: error.message,
         });
     }

@@ -96,3 +96,15 @@ export const getDualityQuestionSubmissions = async (questionId: string) => {
     const res = await api.get(`/duality/submissions/question/${questionId}`);
     return res.data;
 };
+
+// ========== ADMIN SPECIAL ==========
+
+export const getDualityUsers = async () => {
+    const res = await api.get('/duality/auth/users');
+    return res.data;
+};
+
+export const getAllDualitySubmissions = async () => {
+    const res = await api.get('/duality/submissions/all');
+    return res.data;
+};

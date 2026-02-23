@@ -1,34 +1,36 @@
 import { User, Trophy, Target, Calendar, TrendingUp, Award } from 'lucide-react';
 
-interface ProfileStats {
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string;
   totalSolved: number;
   easySolved: number;
   mediumSolved: number;
   hardSolved: number;
-  rank: number;
   streak: number;
   joinDate: string;
+  lastActiveDate: string;
 }
 
-const mockStats: ProfileStats = {
-  totalSolved: 45,
-  easySolved: 20,
-  mediumSolved: 18,
-  hardSolved: 7,
-  rank: 1247,
-  streak: 12,
-  joinDate: 'January 15, 2026'
-};
+interface Submission {
+  _id: string;
+  question: {
+    title: string;
+    difficulty: string;
+  };
+  status: string;
+  submittedAt: string;
+}
 
-const recentActivity = [
-  { date: '2026-02-22', problem: 'Two Sum', difficulty: 'Easy', status: 'Solved' },
-  { date: '2026-02-21', problem: 'Add Two Numbers', difficulty: 'Medium', status: 'Solved' },
-  { date: '2026-02-21', problem: 'Valid Parentheses', difficulty: 'Easy', status: 'Solved' },
-  { date: '2026-02-20', problem: 'Climbing Stairs', difficulty: 'Easy', status: 'Solved' },
-  { date: '2026-02-19', problem: 'Median of Arrays', difficulty: 'Hard', status: 'Attempted' },
-];
-
-export function Profile({ userName }: { userName: string }) {
+export function Profile({ user, submissions }: { user: User, submissions: Submission[] }) {
+  const recentActivity = submissions.slice(0, 5).map(s => ({
+    date: new Date(s.submittedAt).toLocaleDateString(),
+    problem: s.question.title,
+    difficulty: s.question.difficulty,
+    status: s.status === 'accepted' ? 'Solved' : 'Attempted'
+  }));
   return (
     <div className="space-y-8">
       {/* Profile Header */}
@@ -38,16 +40,16 @@ export function Profile({ userName }: { userName: string }) {
             <User className="w-10 h-10 text-white" />
           </div>
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-white mb-1">{userName}</h2>
-            <p className="text-gray-400 text-sm">Rank #{mockStats.rank.toLocaleString()}</p>
+            <h2 className="text-2xl font-bold text-white mb-1">{user.name}</h2>
+            <p className="text-gray-400 text-sm">Member since {new Date(user.joinDate).toLocaleDateString()}</p>
           </div>
           <div className="flex gap-6">
             <div className="text-center">
-              <div className="text-2xl font-bold text-white">{mockStats.streak}</div>
+              <div className="text-2xl font-bold text-white">{user.streak}</div>
               <div className="text-xs text-gray-500">Day Streak</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-white">{mockStats.totalSolved}</div>
+              <div className="text-2xl font-bold text-white">{user.totalSolved}</div>
               <div className="text-xs text-gray-500">Solved</div>
             </div>
           </div>
@@ -63,13 +65,10 @@ export function Profile({ userName }: { userName: string }) {
             </div>
             <div>
               <p className="text-xs text-gray-500">Easy Problems</p>
-              <p className="text-2xl font-bold text-green-500">{mockStats.easySolved}</p>
+              <p className="text-2xl font-bold text-green-500">{user.easySolved}</p>
             </div>
           </div>
-          <div className="w-full bg-zinc-800 rounded-full h-2">
-            <div className="bg-green-500 rounded-full h-2" style={{ width: '65%' }}></div>
-          </div>
-          <p className="text-xs text-gray-500 mt-2">65% completion rate</p>
+          <div className="w-full bg-zinc-800 rounded-full h-2 text-transparent">.</div>
         </div>
 
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
@@ -79,13 +78,10 @@ export function Profile({ userName }: { userName: string }) {
             </div>
             <div>
               <p className="text-xs text-gray-500">Medium Problems</p>
-              <p className="text-2xl font-bold text-yellow-500">{mockStats.mediumSolved}</p>
+              <p className="text-2xl font-bold text-yellow-500">{user.mediumSolved}</p>
             </div>
           </div>
-          <div className="w-full bg-zinc-800 rounded-full h-2">
-            <div className="bg-yellow-500 rounded-full h-2" style={{ width: '45%' }}></div>
-          </div>
-          <p className="text-xs text-gray-500 mt-2">45% completion rate</p>
+          <div className="w-full bg-zinc-800 rounded-full h-2 text-transparent">.</div>
         </div>
 
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
@@ -95,13 +91,10 @@ export function Profile({ userName }: { userName: string }) {
             </div>
             <div>
               <p className="text-xs text-gray-500">Hard Problems</p>
-              <p className="text-2xl font-bold text-red-500">{mockStats.hardSolved}</p>
+              <p className="text-2xl font-bold text-red-500">{user.hardSolved}</p>
             </div>
           </div>
-          <div className="w-full bg-zinc-800 rounded-full h-2">
-            <div className="bg-red-500 rounded-full h-2" style={{ width: '25%' }}></div>
-          </div>
-          <p className="text-xs text-gray-500 mt-2">25% completion rate</p>
+          <div className="w-full bg-zinc-800 rounded-full h-2 text-transparent">.</div>
         </div>
       </div>
 
@@ -113,8 +106,8 @@ export function Profile({ userName }: { userName: string }) {
         </h3>
         <div className="space-y-3">
           {recentActivity.map((activity, index) => (
-            <div 
-              key={index} 
+            <div
+              key={index}
               className="flex items-center justify-between p-4 bg-black rounded-lg border border-zinc-800"
             >
               <div className="flex items-center gap-4">
@@ -124,11 +117,10 @@ export function Profile({ userName }: { userName: string }) {
                   <p className="text-xs text-gray-500">{activity.difficulty}</p>
                 </div>
               </div>
-              <div className={`px-3 py-1 rounded-lg text-xs font-medium ${
-                activity.status === 'Solved' 
-                  ? 'bg-green-500/10 text-green-500' 
+              <div className={`px-3 py-1 rounded-lg text-xs font-medium ${activity.status === 'Solved'
+                  ? 'bg-green-500/10 text-green-500'
                   : 'bg-yellow-500/10 text-yellow-500'
-              }`}>
+                }`}>
                 {activity.status}
               </div>
             </div>

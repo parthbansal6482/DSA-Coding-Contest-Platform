@@ -13,9 +13,9 @@ Duality is a standalone DSA practice platform integrated into the existing Duali
 - Consistent dark theme (black/grey/zinc) across both platforms
 
 ### 2. **Google Authentication**
-- Single sign-in using Google OAuth
-- Automatic role detection (Admin vs Student)
-- Secure authentication flow
+- Single sign-in using Google OAuth (via DualityAuth)
+- Automatic role detection (Admin vs Student) from database
+- Secure authentication flow via backend evaluation
 - Clean, modern auth interface
 
 ### 3. **Student Dashboard**
@@ -52,9 +52,9 @@ Duality is a standalone DSA practice platform integrated into the existing Duali
 ## Component Structure
 
 ```
-/components/duality/
+/components/duality//
 ├── Landing.tsx              # Platform selection page
-├── GoogleAuth.tsx           # Google authentication component
+├── DualityAuth.tsx           # Real Google authentication component
 ├── StudentDashboard.tsx     # Main student interface
 ├── AdminDashboard.tsx       # Admin question management
 ├── ProblemSolve.tsx         # Problem-solving interface
@@ -110,18 +110,14 @@ Users can easily switch between:
 - **Duality**: For individual practice anytime
 - **Duality Extended**: For team competitions with tactical features
 
-## Mock Data
+## Data Integration
 
-Currently using mock data for demonstration:
-- **Problems**: 10 sample DSA problems across various difficulties
-- **User Stats**: Sample profile statistics and achievements
-- **Test Cases**: Simulated test execution results
-
-In production, this would be replaced with:
-- Backend API integration
-- Real Google OAuth
-- Database for problems and submissions
-- Actual code execution engine
+The platform is fully integrated with a real backend:
+- **Problems**: Fetched dynamically from the database
+- **User Stats**: Real-time progress tracking and profile statistics
+- **Real-time Sync**: Dashboards update instantly via WebSockets (Socket.IO)
+- **Submissions**: Evaluated by a real code execution engine (Docker)
+- **Authentication**: Real Google Identity Services integration
 
 ## Future Enhancements
 
@@ -151,7 +147,7 @@ Potential features for future development:
 
 ```tsx
 import { Landing } from './components/duality/Landing';
-import { GoogleAuth } from './components/duality/GoogleAuth';
+import { DualityAuth } from './components/duality/DualityAuth';
 import { StudentDashboard } from './components/duality/StudentDashboard';
 
 // In App.tsx

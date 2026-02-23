@@ -22,7 +22,7 @@ interface Problem {
   description: string;
   constraints: string[];
   examples: { input: string; output: string; explanation?: string }[];
-  boilerplate?: {
+  boilerplate: {
     python?: string;
     c?: string;
     cpp?: string;
@@ -50,13 +50,12 @@ export function ProblemSolve({
   useEffect(() => {
     const fetchProblem = async () => {
       try {
-        const response = await getDualityQuestion(problemId);
-        if (response.success) {
-          setProblem(response.data);
-          // Set initial code to template if available
-          if (response.data.boilerplate && response.data.boilerplate['python']) {
-            setCode(response.data.boilerplate['python']);
-          }
+        const result = await getDualityQuestion(problemId);
+        if (result.success) {
+          setProblem(result.data);
+          // Set initial code based on boilerplate
+          const boilerplate = result.data.boilerplate || {};
+          setCode(boilerplate[selectedLanguage] || '');
         }
       } catch (error) {
         console.error('Error fetching problem:', error);
@@ -96,11 +95,20 @@ export function ProblemSolve({
 
   const handleSubmit = async () => {
     setIsSubmitting(true);
+    setTestResults(null);
     try {
       const result = await submitDualityCode(problemId, code, selectedLanguage);
-      if (result.success) {
-        alert('Solution submitted! Result will appear in your history shortly.');
-        // In a real implementation, we'd wait for socket update or poll
+      if (result.success && result.data) {
+        setTestResults(result.data.results);
+
+        // Show success/failure alert
+        if (result.data.status === 'accepted') {
+          alert('Solution accepted! You passed all test cases.');
+        } else {
+          alert(`Solution failed. Status: ${result.data.status}`);
+        }
+      } else {
+        alert('Failed to submit code: ' + (result.message || 'Unknown error'));
       }
     } catch (error) {
       console.error('Submission error:', error);
@@ -148,7 +156,7 @@ export function ProblemSolve({
   return (
     <div className="fixed inset-0 bg-black flex flex-col overflow-hidden z-50">
       {/* Header */}
-      <header className="bg-zinc-900 border-b border-zinc-800 px-6 py-4 flex-shrink-0">
+      <header className="bg-zinc-900 border-b border-zinc-800 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
@@ -180,162 +188,137 @@ export function ProblemSolve({
               <RotateCcw className="w-4 h-4" />
               <span className="text-sm">Reset</span>
             </button>
-            <button
-              onClick={handleRunCode}
-              disabled={isRunning}
-              className="flex items-center gap-2 px-4 py-2 bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 transition-colors disabled:opacity-50"
-            >
-              <Play className="w-4 h-4" />
-              <span className="text-sm">{isRunning ? 'Running...' : 'Run Code'}</span>
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-black rounded-lg hover:bg-gray-200 transition-colors font-medium disabled:opacity-50"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span className="text-sm">{isSubmitting ? 'Submitting...' : 'Submit'}</span>
-            </button>
           </div>
         </div>
       </header>
 
-      {/* Main Content Resizable Layout */}
-      <div className="flex-1 overflow-hidden">
-        <PanelGroup direction="horizontal">
-
-          {/* Left Panel - Problem Description */}
-          <Panel defaultSize={40} minSize={20} className="flex flex-col bg-black h-full">
-            <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-6">
-              {/* Description */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  Description
-                </h3>
-                <div className="text-gray-300 leading-relaxed whitespace-pre-line">
-                  {problem.description}
-                </div>
+      {/* Main Content */}
+      <div className="flex-1 grid grid-cols-2 overflow-hidden">
+        {/* Left Panel - Problem Description */}
+        <div className="border-r border-zinc-800 overflow-y-auto">
+          <div className="p-6 space-y-6">
+            {/* Description */}
+            <div>
+              <h3 className="text-sm font-medium text-gray-400 mb-3 flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Description
+              </h3>
+              <div className="text-gray-300 leading-relaxed whitespace-pre-line">
+                {problem.description}
               </div>
-
-              {/* Examples */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-400 mb-3">Examples</h3>
-                <div className="space-y-4">
-                  {problem.examples.map((example, index) => (
-                    <div key={index} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-                      <div className="text-xs font-medium text-gray-500 mb-2">Example {index + 1}</div>
-                      <div className="space-y-2 text-sm">
-                        <div>
-                          <span className="text-gray-500">Input: </span>
-                          <code className="text-white font-mono">{example.input}</code>
-                        </div>
-                        <div>
-                          <span className="text-gray-500">Output: </span>
-                          <code className="text-white font-mono">{example.output}</code>
-                        </div>
-                        {example.explanation && (
-                          <div>
-                            <span className="text-gray-500">Explanation: </span>
-                            <span className="text-gray-400">{example.explanation}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Constraints */}
-              {problem.constraints && problem.constraints.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium text-gray-400 mb-3">Constraints</h3>
-                  <ul className="space-y-2">
-                    {problem.constraints.map((constraint, index) => (
-                      <li key={index} className="text-sm text-gray-400 flex gap-2">
-                        <span className="text-gray-600">•</span>
-                        <code className="font-mono">{constraint}</code>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
-          </Panel>
 
-          <PanelResizeHandle className="w-2 bg-zinc-900 hover:bg-blue-600/50 transition-colors flex items-center justify-center group cursor-col-resize">
-            <div className="h-8 w-1 bg-zinc-700 group-hover:bg-blue-400 rounded-full" />
-          </PanelResizeHandle>
-
-          {/* Right Panel - Code Editor & Results */}
-          <Panel defaultSize={60} minSize={30}>
-            <PanelGroup direction="vertical">
-
-              {/* Top Nested Panel - Editor */}
-              <Panel defaultSize={(testResults || isRunning) ? 60 : 100} minSize={30} className="flex flex-col bg-black">
-                {/* Editor Header & Controls */}
-                <div className="bg-zinc-900 border-b border-zinc-800 px-6 py-3 flex items-center justify-between flex-shrink-0">
-                  <div className="flex gap-2">
-                    {(['python', 'c', 'cpp', 'java'] as Language[]).map((lang) => (
-                      <button
-                        key={lang}
-                        onClick={() => handleLanguageChange(lang)}
-                        className={`px - 4 py - 2 rounded - lg text - sm font - medium transition - colors ${selectedLanguage === lang
-                            ? 'bg-white text-black'
-                            : 'bg-zinc-800 text-gray-400 hover:text-white'
-                          } `}
-                      >
-                        {lang === 'cpp' ? 'C++' : lang === 'c' ? 'C' : lang.charAt(0).toUpperCase() + lang.slice(1)}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={handleRunCode}
-                      disabled={isRunning || isSubmitting}
-                      className="bg-zinc-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-zinc-700 transition-colors disabled:opacity-50 flex items-center gap-2"
-                    >
-                      {isRunning ? (
-                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <Play className="w-4 h-4" />
+            {/* Examples */}
+            <div>
+              <h3 className="text-sm font-medium text-gray-400 mb-3">Examples</h3>
+              <div className="space-y-4">
+                {problem.examples.map((example, index) => (
+                  <div key={index} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+                    <div className="text-xs font-medium text-gray-500 mb-2">Example {index + 1}</div>
+                    <div className="space-y-2 text-sm">
+                      <div>
+                        <span className="text-gray-500">Input: </span>
+                        <code className="text-white font-mono">{example.input}</code>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Output: </span>
+                        <code className="text-white font-mono">{example.output}</code>
+                      </div>
+                      {example.explanation && (
+                        <div>
+                          <span className="text-gray-500">Explanation: </span>
+                          <span className="text-gray-400">{example.explanation}</span>
+                        </div>
                       )}
-                      Run Code
-                    </button>
-                    <button
-                      onClick={handleSubmit}
-                      disabled={isRunning || isSubmitting}
-                      className="bg-white text-black px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors disabled:opacity-50 flex items-center gap-2"
-                    >
-                      Submit
-                    </button>
+                    </div>
                   </div>
-                </div>
+                ))}
+              </div>
+            </div>
 
-                {/* Monaco Code Editor */}
-                <div className="flex-1 relative min-h-0">
-                  <div className="absolute inset-0">
-                    <MonacoCodeEditor
-                      language={selectedLanguage}
-                      value={code}
-                      onChange={(val) => setCode(val)}
-                      onRun={handleRunCode}
-                      onSubmit={handleSubmit}
-                    />
-                  </div>
+            {/* Constraints */}
+            {problem.constraints && problem.constraints.length > 0 && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-400 mb-3">Constraints</h3>
+                <ul className="space-y-2">
+                  {problem.constraints.map((constraint, index) => (
+                    <li key={index} className="text-sm text-gray-400 flex gap-2">
+                      <span className="text-gray-600">•</span>
+                      <code className="font-mono">{constraint}</code>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Panel - Code Editor */}
+        <div className="flex flex-col overflow-hidden bg-black">
+          {/* Header & Controls */}
+          <div className="bg-zinc-900 border-b border-zinc-800 px-6 py-3 flex items-center justify-between">
+            <div className="flex gap-2">
+              {(['python', 'c', 'cpp', 'java'] as Language[]).map((lang) => (
+                <button
+                  key={lang}
+                  onClick={() => handleLanguageChange(lang)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selectedLanguage === lang
+                    ? 'bg-white text-black'
+                    : 'bg-zinc-800 text-gray-400 hover:text-white'
+                    }`}
+                >
+                  {lang === 'cpp' ? 'C++' : lang === 'c' ? 'C' : lang.charAt(0).toUpperCase() + lang.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleRunCode}
+                disabled={isRunning || isSubmitting}
+                className="bg-zinc-800 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-zinc-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {isRunning ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Play className="w-4 h-4" />
+                )}
+                Run Code
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={isRunning || isSubmitting}
+                className="bg-white text-black px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 min-h-0 flex flex-col">
+            <PanelGroup direction="vertical">
+              {/* Monaco Code Editor */}
+              <Panel defaultSize={(testResults || isRunning || isSubmitting) ? 60 : 100} minSize={20} className="relative min-h-0 flex flex-col w-full h-full">
+                <div className="absolute inset-0">
+                  <MonacoCodeEditor
+                    language={selectedLanguage}
+                    value={code}
+                    onChange={(val) => setCode(val)}
+                    onRun={handleRunCode}
+                    onSubmit={handleSubmit}
+                  />
                 </div>
               </Panel>
 
-              {/* Bottom Nested Panel - Test Results (only displays if requested) */}
-              {(testResults || isRunning) && (
+              {/* Test Results */}
+              {(testResults || isRunning || isSubmitting) && (
                 <>
-                  <PanelResizeHandle className="h-2 bg-zinc-900 hover:bg-blue-600/50 transition-colors flex items-center justify-center group cursor-row-resize">
+                  <PanelResizeHandle className="h-2 bg-zinc-900 hover:bg-blue-600/50 transition-colors flex items-center justify-center group cursor-row-resize z-10 w-full relative">
                     <div className="w-8 h-1 bg-zinc-700 group-hover:bg-blue-400 rounded-full" />
                   </PanelResizeHandle>
 
-                  <Panel defaultSize={40} minSize={15} className="bg-zinc-900 flex flex-col">
-                    <div className="px-6 py-3 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50 flex-shrink-0">
+                  <Panel defaultSize={40} minSize={20} className="flex flex-col min-h-0 bg-zinc-900 overflow-hidden w-full h-full">
+                    <div className="px-6 py-3 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
                       <h3 className="text-sm font-medium text-white flex items-center gap-2">
                         <Clock className="w-4 h-4" />
                         Test Results
@@ -350,18 +333,18 @@ export function ProblemSolve({
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                      {isRunning ? (
+                      {(isRunning || isSubmitting) ? (
                         <div className="flex items-center justify-center h-full text-blue-400 gap-3">
                           <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                          Running Tests...
+                          {isSubmitting ? 'Evaluating Submission...' : 'Running Tests...'}
                         </div>
                       ) : testResults?.map((test, index) => (
                         <div
                           key={index}
-                          className={`border rounded - lg p - 4 ${test.passed
-                              ? 'border-green-500/20 bg-green-500/5'
-                              : 'border-red-500/20 bg-red-500/5'
-                            } `}
+                          className={`border rounded-lg p-4 ${test.passed
+                            ? 'border-green-500/20 bg-green-500/5'
+                            : 'border-red-500/20 bg-red-500/5'
+                            }`}
                         >
                           <div className="flex items-center gap-2 mb-3">
                             {test.passed ? (
@@ -369,7 +352,7 @@ export function ProblemSolve({
                             ) : (
                               <XCircle className="w-4 h-4 text-red-500" />
                             )}
-                            <span className={`font - medium ${test.passed ? 'text-green-500' : 'text-red-500'} `}>
+                            <span className={`font-medium ${test.passed ? 'text-green-500' : 'text-red-500'}`}>
                               Test Case {index + 1}
                             </span>
                           </div>
@@ -385,7 +368,7 @@ export function ProblemSolve({
                             {test.actualOutput && (
                               <div>
                                 <span className="text-gray-500 block mb-1">Your Output:</span>
-                                <pre className={`bg - black / 50 p - 2 rounded font - mono text - xs overflow - x - auto ${test.passed ? 'text-green-400' : 'text-red-400'} `}>
+                                <pre className={`bg-black/50 p-2 rounded font-mono text-xs overflow-x-auto ${test.passed ? 'text-green-400' : 'text-red-400'}`}>
                                   {test.actualOutput}
                                 </pre>
                               </div>
@@ -406,8 +389,8 @@ export function ProblemSolve({
                 </>
               )}
             </PanelGroup>
-          </Panel>
-        </PanelGroup>
+          </div>
+        </div>
       </div>
     </div>
   );

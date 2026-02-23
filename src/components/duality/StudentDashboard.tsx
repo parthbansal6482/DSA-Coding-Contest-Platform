@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Code2, CheckCircle2, Clock, Trophy, User, LogOut, TrendingUp, Target, BarChart3, FileText } from 'lucide-react';
 import { Profile } from './Profile';
 import { SubmissionsHistory } from './SubmissionsHistory';
-import { getDualityQuestions } from '../../services/duality.service';
+import { getDualityQuestions, dualityGetMe, getDualityUserSubmissions } from '../../services/duality.service';
+import dualitySocketService from '../../services/dualitySocket.service';
 
 interface Problem {
   _id: string;
@@ -28,26 +29,50 @@ export function StudentDashboard({
   const [isLoading, setIsLoading] = useState(true);
 
   // Get user stats from DualityUser stored in localStorage
-  const dualityUser = JSON.parse(localStorage.getItem('dualityUser') || '{}');
-  const solvedCount = dualityUser.totalSolved || 0;
-  const easyCount = dualityUser.easySolved || 0;
-  const mediumCount = dualityUser.mediumSolved || 0;
-  const hardCount = dualityUser.hardSolved || 0;
+  const [user, setUser] = useState<any>(JSON.parse(localStorage.getItem('dualityUser') || '{}'));
+  const [submissions, setSubmissions] = useState<any[]>([]);
+
+  const solvedCount = user.totalSolved || 0;
+  const easyCount = user.easySolved || 0;
+  const mediumCount = user.mediumSolved || 0;
+  const hardCount = user.hardSolved || 0;
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const [questionsRes, userRes, submissionsRes] = await Promise.all([
+        getDualityQuestions(),
+        dualityGetMe(),
+        getDualityUserSubmissions()
+      ]);
+
+      if (questionsRes.success) setProblems(questionsRes.data);
+      if (userRes.success) {
+        setUser(userRes.data);
+        localStorage.setItem('dualityUser', JSON.stringify(userRes.data));
+      }
+      if (submissionsRes.success) setSubmissions(submissionsRes.data);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchQuestions = async () => {
-      try {
-        const result = await getDualityQuestions();
-        if (result.success) {
-          setProblems(result.data);
-        }
-      } catch (error) {
-        console.error('Error fetching questions:', error);
-      } finally {
-        setIsLoading(false);
+    fetchData();
+
+    // Socket listeners
+    dualitySocketService.onSubmissionUpdate((data: any) => {
+      // If it's my submission, refresh
+      if (data.user.id === user.id || data.user.id === user._id) {
+        fetchData();
       }
-    };
-    fetchQuestions();
+    });
+
+    dualitySocketService.onQuestionUpdate(() => {
+      fetchData();
+    });
   }, []);
 
   const categories = ['All', ...Array.from(new Set(problems.map(p => p.category)))];
@@ -140,7 +165,7 @@ export function StudentDashboard({
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         {activeTab === 'profile' ? (
-          <Profile userName={userName} />
+          <Profile user={user} submissions={submissions} />
         ) : activeTab === 'history' ? (
           <SubmissionsHistory />
         ) : (

@@ -1,88 +1,58 @@
 import { CheckCircle2, XCircle, Clock, Code2 } from 'lucide-react';
 
 interface Submission {
-  id: string;
-  problemTitle: string;
+  _id: string;
+  question: {
+    title: string;
+  };
   language: string;
-  status: 'Accepted' | 'Wrong Answer' | 'Runtime Error' | 'Time Limit Exceeded';
-  runtime: string;
-  memory: string;
-  timestamp: string;
-  testsPassed: number;
-  totalTests: number;
+  status: string;
+  executionTime: number;
+  memoryUsed: number;
+  submittedAt: string;
+  testCasesPassed: number;
+  totalTestCases: number;
 }
 
-const mockSubmissions: Submission[] = [
-  {
-    id: '1',
-    problemTitle: 'Two Sum',
-    language: 'Python',
-    status: 'Accepted',
-    runtime: '45 ms',
-    memory: '14.2 MB',
-    timestamp: '2026-02-22 14:30',
-    testsPassed: 5,
-    totalTests: 5
-  },
-  {
-    id: '2',
-    problemTitle: 'Add Two Numbers',
-    language: 'C++',
-    status: 'Accepted',
-    runtime: '12 ms',
-    memory: '8.5 MB',
-    timestamp: '2026-02-22 13:15',
-    testsPassed: 8,
-    totalTests: 8
-  },
-  {
-    id: '3',
-    problemTitle: 'Longest Substring',
-    language: 'Java',
-    status: 'Wrong Answer',
-    runtime: '78 ms',
-    memory: '16.8 MB',
-    timestamp: '2026-02-21 18:45',
-    testsPassed: 7,
-    totalTests: 10
-  },
-  {
-    id: '4',
-    problemTitle: 'Valid Parentheses',
-    language: 'Python',
-    status: 'Accepted',
-    runtime: '32 ms',
-    memory: '13.1 MB',
-    timestamp: '2026-02-21 16:20',
-    testsPassed: 6,
-    totalTests: 6
-  },
-  {
-    id: '5',
-    problemTitle: 'Median of Arrays',
-    language: 'C++',
-    status: 'Time Limit Exceeded',
-    runtime: '> 2000 ms',
-    memory: '10.2 MB',
-    timestamp: '2026-02-20 20:10',
-    testsPassed: 3,
-    totalTests: 12
-  },
-];
+import { useEffect, useState } from 'react';
+import { getDualityUserSubmissions } from '../../services/duality.service';
 
 export function SubmissionsHistory() {
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchSubmissions = async () => {
+      try {
+        const result = await getDualityUserSubmissions();
+        if (result.success) {
+          setSubmissions(result.data);
+        }
+      } catch (error) {
+        console.error('Error fetching submissions:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchSubmissions();
+  }, []);
+
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Accepted': return 'bg-green-500/10 text-green-500 border-green-500/30';
-      case 'Wrong Answer': return 'bg-red-500/10 text-red-500 border-red-500/30';
-      case 'Runtime Error': return 'bg-orange-500/10 text-orange-500 border-orange-500/30';
-      case 'Time Limit Exceeded': return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30';
+    switch (status.toLowerCase()) {
+      case 'accepted': return 'bg-green-500/10 text-green-500 border-green-500/30';
+      case 'wrong_answer': return 'bg-red-500/10 text-red-500 border-red-500/30';
+      case 'runtime_error': return 'bg-orange-500/10 text-orange-500 border-orange-500/30';
+      case 'time_limit_exceeded': return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30';
       default: return 'bg-gray-500/10 text-gray-500 border-gray-500/30';
     }
   };
 
+  const getStatusDisplay = (status: string) => {
+    return status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
   const getStatusIcon = (status: string) => {
-    if (status === 'Accepted') {
+    if (status.toLowerCase() === 'accepted') {
       return <CheckCircle2 className="w-4 h-4" />;
     }
     return <XCircle className="w-4 h-4" />;
@@ -94,7 +64,7 @@ export function SubmissionsHistory() {
         <h2 className="text-xl font-bold text-white">Submission History</h2>
         <div className="flex items-center gap-2 text-sm text-gray-400">
           <Code2 className="w-4 h-4" />
-          <span>{mockSubmissions.length} Total Submissions</span>
+          <span>{submissions.length} Total Submissions</span>
         </div>
       </div>
 
@@ -113,35 +83,35 @@ export function SubmissionsHistory() {
               </tr>
             </thead>
             <tbody>
-              {mockSubmissions.map((submission) => (
-                <tr key={submission.id} className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors">
+              {submissions.map((submission) => (
+                <tr key={submission._id} className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors">
                   <td className="px-6 py-4">
                     <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${getStatusColor(submission.status)} w-fit`}>
                       {getStatusIcon(submission.status)}
-                      <span className="text-xs font-medium">{submission.status}</span>
+                      <span className="text-xs font-medium">{getStatusDisplay(submission.status)}</span>
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-white font-medium">{submission.problemTitle}</span>
+                    <span className="text-white font-medium">{submission.question.title}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-sm text-gray-400 font-mono">{submission.language}</span>
+                    <span className="text-sm text-gray-400 font-mono capitalize">{submission.language}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-sm text-gray-400">{submission.runtime}</span>
+                    <span className="text-sm text-gray-400">{submission.executionTime} ms</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-sm text-gray-400">{submission.memory}</span>
+                    <span className="text-sm text-gray-400">{submission.memoryUsed} KB</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className={`text-sm ${submission.testsPassed === submission.totalTests ? 'text-green-500' : 'text-yellow-500'}`}>
-                      {submission.testsPassed}/{submission.totalTests}
+                    <span className={`text-sm ${submission.testCasesPassed === submission.totalTestCases ? 'text-green-500' : 'text-yellow-500'}`}>
+                      {submission.testCasesPassed}/{submission.totalTestCases}
                     </span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2 text-sm text-gray-400">
                       <Clock className="w-3 h-3" />
-                      <span>{submission.timestamp}</span>
+                      <span>{new Date(submission.submittedAt).toLocaleString()}</span>
                     </div>
                   </td>
                 </tr>
@@ -156,22 +126,24 @@ export function SubmissionsHistory() {
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
           <p className="text-xs text-gray-500 mb-1">Acceptance Rate</p>
           <p className="text-2xl font-bold text-green-500">
-            {Math.round((mockSubmissions.filter(s => s.status === 'Accepted').length / mockSubmissions.length) * 100)}%
+            {submissions.length > 0 ? Math.round((submissions.filter(s => s.status === 'accepted').length / submissions.length) * 100) : 0}%
           </p>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
           <p className="text-xs text-gray-500 mb-1">Accepted</p>
           <p className="text-2xl font-bold text-white">
-            {mockSubmissions.filter(s => s.status === 'Accepted').length}
+            {submissions.filter(s => s.status === 'accepted').length}
           </p>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-          <p className="text-xs text-gray-500 mb-1">Most Used Language</p>
-          <p className="text-lg font-bold text-white">Python</p>
+          <p className="text-xs text-gray-500 mb-1">Language Distribution</p>
+          <p className="text-xs font-bold text-white">
+            {submissions.length > 0 ? Array.from(new Set(submissions.map(s => s.language))).slice(0, 2).join(', ') : 'None'}
+          </p>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
           <p className="text-xs text-gray-500 mb-1">Total Submissions</p>
-          <p className="text-2xl font-bold text-white">{mockSubmissions.length}</p>
+          <p className="text-2xl font-bold text-white">{submissions.length}</p>
         </div>
       </div>
     </div>

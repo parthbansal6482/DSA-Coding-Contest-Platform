@@ -1,6 +1,8 @@
 const getDualitySubmission = require('../../models/duality/DualitySubmission');
 const getDualityQuestion = require('../../models/duality/DualityQuestion');
+const getDualityUser = require('../../models/duality/DualityUser');
 const { runTestCases } = require('../../services/execution.service');
+const { broadcastDualitySubmissionUpdate } = require('../../socket');
 
 /**
  * Submit code for a question
@@ -26,24 +28,122 @@ exports.submitCode = async (req, res) => {
         }
 
         const DualitySubmission = getDualitySubmission();
+        const DualityUser = getDualityUser();
+
+        // 1. Prepare test cases (Both Examples + Hidden Test Cases for Submission)
+        const allTestCases = [
+            ...(question.examples || []).map((ex, i) => ({
+                input: ex.input,
+                expectedOutput: ex.output,
+                id: `example_${i}`
+            })),
+            ...(question.testCases || []).map((tc, i) => ({
+                input: tc.input,
+                expectedOutput: tc.output,
+                id: `test_${i}`
+            }))
+        ];
+
+        // 2. Execute code synchronously
+        const result = await runTestCases(code, language, allTestCases);
+
+        // 3. Determine status
+        let status = 'accepted';
+        if (result.passedTests < result.totalTests) {
+            status = 'wrong_answer';
+        }
+
+        const hasTimeout = result.results.some(r => r.error && r.error.includes('timeout'));
+        const hasMLE = result.results.some(r => r.exitCode === 137);
+
+        if (hasTimeout) {
+            status = 'time_limit_exceeded';
+        } else if (hasMLE) {
+            status = 'memory_limit_exceeded';
+        }
+
+        const hasRuntimeError = result.results.some(r => r.error && !r.error.includes('timeout') && r.exitCode !== 137);
+        if (hasRuntimeError && (status === 'accepted' || status === 'wrong_answer')) {
+            status = 'runtime_error';
+        }
+
+        const avgTime = result.results.length > 0 ? (result.results.reduce((sum, r) => sum + (r.executionTime || 0), 0) / result.results.length) : 0;
+        const maxMem = result.results.length > 0 ? Math.max(...result.results.map(r => r.memoryUsed || 0)) : 0;
+
+        // 4. Save to Database
         const submission = await DualitySubmission.create({
             user: userId,
             question: questionId,
             code,
             language,
-            status: 'pending',
-            totalTestCases: question.testCases.length,
+            status,
+            totalTestCases: result.totalTests,
+            testCasesPassed: result.passedTests,
+            executionTime: Math.round(avgTime),
+            memoryUsed: maxMem,
+            testResults: result.results,
+        });
+
+        // 5. Update User Stats if Accepted
+        if (status === 'accepted') {
+            const previousAccepted = await DualitySubmission.findOne({
+                user: userId,
+                question: questionId,
+                status: 'accepted',
+                _id: { $ne: submission._id },
+            });
+
+            if (!previousAccepted) {
+                const difficultyField = {
+                    'Easy': 'easySolved',
+                    'Medium': 'mediumSolved',
+                    'Hard': 'hardSolved',
+                }[question.difficulty];
+
+                const update = { $inc: { totalSolved: 1 } };
+                if (difficultyField) update.$inc[difficultyField] = 1;
+
+                await DualityUser.findByIdAndUpdate(userId, update);
+            }
+        }
+
+        // 6. Broadcast Update
+        broadcastDualitySubmissionUpdate(userId, {
+            submissionId: submission._id,
+            status,
+            totalTests: result.totalTests,
+            passedTests: result.passedTests,
+            results: result.results.map(r => ({
+                passed: r.passed,
+                input: r.input,
+                expectedOutput: r.expectedOutput,
+                actualOutput: r.actualOutput,
+                error: r.error
+            })),
+            submittedAt: submission.submittedAt,
+            user: { id: userId, name: req.dualityUser.name },
+            question: { id: questionId, title: question.title }
         });
 
         res.status(201).json({
             success: true,
-            message: 'Submission received and being evaluated',
+            message: 'Submission evaluated successfully',
             data: {
                 submissionId: submission._id,
-                status: 'pending',
+                status,
+                totalTests: result.totalTests,
+                passedTests: result.passedTests,
+                results: result.results.map(r => ({
+                    passed: r.passed,
+                    input: r.input,
+                    expectedOutput: r.expectedOutput,
+                    actualOutput: r.actualOutput,
+                    error: r.error
+                }))
             },
         });
     } catch (error) {
+        console.error('Submission error stack:', error.stack);
         console.error('Submission error:', error);
         res.status(500).json({ success: false, message: 'Error processing submission', error: error.message });
     }
@@ -172,6 +272,26 @@ exports.getQuestionSubmissions = async (req, res) => {
         res.status(200).json({ success: true, data: submissions });
     } catch (error) {
         console.error('Get question submissions error:', error);
+        res.status(500).json({ success: false, message: 'Error fetching submissions', error: error.message });
+    }
+};
+
+/**
+ * Get all submissions (Admin only)
+ * GET /api/duality/submissions/all
+ */
+exports.getAllSubmissions = async (req, res) => {
+    try {
+        const DualitySubmission = getDualitySubmission();
+        const submissions = await DualitySubmission.find({})
+            .populate('user', 'name email avatar')
+            .populate('question', 'title difficulty category')
+            .sort({ submittedAt: -1 })
+            .limit(100);
+
+        res.status(200).json({ success: true, data: submissions });
+    } catch (error) {
+        console.error('Get all submissions error:', error);
         res.status(500).json({ success: false, message: 'Error fetching submissions', error: error.message });
     }
 };
