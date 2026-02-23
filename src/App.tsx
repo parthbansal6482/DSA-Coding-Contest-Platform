@@ -17,6 +17,9 @@ type UserType = 'admin' | 'team';
 type DualityView = 'landing' | 'auth' | 'student' | 'admin' | 'problem';
 type AppMode = 'platform-select' | 'duality' | 'duality-extended';
 
+const DUALITY_VIEW_KEY = 'dualityView';
+const DUALITY_SELECTED_PROBLEM_KEY = 'dualitySelectedProblemId';
+
 export default function App() {
   // Platform mode
   const [appMode, setAppMode] = useState<AppMode>('platform-select');
@@ -57,15 +60,39 @@ export default function App() {
     if (dualityToken && dualityUserStr) {
       try {
         const user = JSON.parse(dualityUserStr);
+        const savedView = localStorage.getItem(DUALITY_VIEW_KEY) as DualityView | null;
+        const savedProblemId = localStorage.getItem(DUALITY_SELECTED_PROBLEM_KEY);
+
         setAppMode('duality');
         setDualityUserName(user.name);
         setDualityUserType(user.role);
-        setDualityView(user.role === 'admin' ? 'admin' : 'student');
+        if (user.role === 'admin') {
+          setDualityView('admin');
+        } else if (savedView === 'problem' && savedProblemId) {
+          setSelectedProblemId(savedProblemId);
+          setDualityView('problem');
+        } else if (savedView === 'student' || savedView === 'auth' || savedView === 'landing') {
+          setDualityView(savedView);
+        } else {
+          setDualityView('student');
+        }
       } catch (e) {
         console.error('Error parsing duality user', e);
       }
     }
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem(DUALITY_VIEW_KEY, dualityView);
+  }, [dualityView]);
+
+  useEffect(() => {
+    if (selectedProblemId) {
+      localStorage.setItem(DUALITY_SELECTED_PROBLEM_KEY, selectedProblemId);
+    } else {
+      localStorage.removeItem(DUALITY_SELECTED_PROBLEM_KEY);
+    }
+  }, [selectedProblemId]);
 
   // Platform selection handlers
   const handleSelectDuality = () => {
@@ -89,6 +116,8 @@ export default function App() {
     setDualityUserName('');
     localStorage.removeItem('dualityToken');
     localStorage.removeItem('dualityUser');
+    localStorage.removeItem(DUALITY_VIEW_KEY);
+    localStorage.removeItem(DUALITY_SELECTED_PROBLEM_KEY);
   };
 
   const handleSolveProblem = (problemId: string) => {

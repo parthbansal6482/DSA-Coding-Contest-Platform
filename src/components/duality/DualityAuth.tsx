@@ -30,7 +30,7 @@ declare global {
   }
 }
 
-const GOOGLE_CLIENT_ID = '929855839228-nqt4uc7sjuh1bbmsdejjq5hcelbv0gcb.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
 export function DualityAuth({
   onLogin,
@@ -44,6 +44,11 @@ export function DualityAuth({
   const googleButtonRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) {
+      setError('Google Sign-In is not configured. Missing VITE_GOOGLE_CLIENT_ID.');
+      return;
+    }
+
     // Wait for Google Identity Services script to load
     const initializeGoogle = () => {
       if (window.google?.accounts?.id && googleButtonRef.current) {
@@ -153,6 +158,8 @@ export function DualityAuth({
             <div ref={googleButtonRef}></div>
           </div>
 
+          <div className="w-full h-10"></div>
+
           {/* Divider */}
           <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
@@ -168,33 +175,12 @@ export function DualityAuth({
           {/* Info Text */}
           <div className="space-y-3 text-sm text-gray-500 text-center">
             <p>
-              Only @bmu.edu.in accounts are allowed. Your role (Admin/Student) is assigned automatically.
+              Only @bmu.edu.in accounts are allowed. 
             </p>
             <p className="text-xs">
               By continuing, you agree to our Terms of Service and Privacy Policy.
             </p>
           </div>
-        </div>
-
-        {/* Features List */}
-        <div className="mt-8 space-y-3">
-          <div className="flex items-center gap-3 text-sm text-gray-500">
-            <div className="w-1.5 h-1.5 rounded-full bg-gray-600"></div>
-            <span>Access to all DSA problems</span>
-          </div>
-          <div className="flex items-center gap-3 text-sm text-gray-500">
-            <div className="w-1.5 h-1.5 rounded-full bg-gray-600"></div>
-            <span>Track your coding progress</span>
-          </div>
-          <div className="flex items-center gap-3 text-sm text-gray-500">
-            <div className="w-1.5 h-1.5 rounded-full bg-gray-600"></div>
-            <span>Build your coding profile</span>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="mt-8 text-center text-xs text-gray-600">
-          <p>© 2026 Duality Platform. All rights reserved.</p>
         </div>
       </div>
     </div>

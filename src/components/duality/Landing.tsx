@@ -15,9 +15,6 @@ export function Landing({
           <h1 className="text-5xl font-bold text-white mb-4">
             Welcome to Duality Platform
           </h1>
-          <p className="text-gray-400 text-lg">
-            Choose your path to master Data Structures & Algorithms
-          </p>
         </div>
 
         {/* Two Options */}
@@ -28,7 +25,7 @@ export function Landing({
             className="group bg-zinc-900 border border-zinc-800 rounded-2xl p-8 hover:border-zinc-600 transition-all hover:bg-zinc-800/50"
           >
             <div className="flex flex-col items-center text-center space-y-6">
-              <div className="w-20 h-20 rounded-full bg-black border border-zinc-800 flex items-center justify-center group-hover:border-zinc-600 transition-colors">
+              <div className="w-20 h-20 rounded-full bg-zinc-900 flex items-center justify-center group-hover:border-zinc-600 transition-colors">
                 <Code2 className="w-10 h-10 text-white" />
               </div>
               
@@ -70,7 +67,7 @@ export function Landing({
             className="group bg-zinc-900 border border-zinc-800 rounded-2xl p-8 hover:border-zinc-600 transition-all hover:bg-zinc-800/50"
           >
             <div className="flex flex-col items-center text-center space-y-6">
-              <div className="w-20 h-20 rounded-full bg-black border border-zinc-800 flex items-center justify-center group-hover:border-zinc-600 transition-colors">
+              <div className="w-20 h-20 rounded-full bg-zinc-900 flex items-center justify-center group-hover:border-zinc-600 transition-colors">
                 <Trophy className="w-10 h-10 text-white" />
               </div>
               
@@ -105,11 +102,6 @@ export function Landing({
               </div>
             </div>
           </button>
-        </div>
-
-        {/* Footer */}
-        <div className="mt-12 text-center text-sm text-gray-600">
-          <p>© 2026 Duality Platform. All rights reserved.</p>
         </div>
       </div>
     </div>

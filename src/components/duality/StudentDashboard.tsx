@@ -13,6 +13,11 @@ interface Problem {
   solved?: boolean;
 }
 
+interface SubmissionRecord {
+  status: string;
+  question: string | { _id?: string; id?: string };
+}
+
 export function StudentDashboard({
   userName,
   onLogout,
@@ -25,6 +30,7 @@ export function StudentDashboard({
   const [activeTab, setActiveTab] = useState<'problems' | 'profile' | 'history'>('problems');
   const [selectedDifficulty, setSelectedDifficulty] = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [problems, setProblems] = useState<Problem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -37,6 +43,29 @@ export function StudentDashboard({
   const mediumCount = user.mediumSolved || 0;
   const hardCount = user.hardSolved || 0;
 
+  const getCurrentUserId = () => {
+    try {
+      const dualityUser = JSON.parse(localStorage.getItem('dualityUser') || '{}');
+      return dualityUser.id || dualityUser._id || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const withSolvedFlags = (questions: Problem[], submissionList: SubmissionRecord[]) => {
+    const solvedQuestionIds = new Set(
+      submissionList
+        .filter((s) => s.status?.toLowerCase() === 'accepted')
+        .map((s) => (typeof s.question === 'string' ? s.question : (s.question?._id || s.question?.id)))
+        .filter(Boolean) as string[]
+    );
+
+    return questions.map((problem) => ({
+      ...problem,
+      solved: solvedQuestionIds.has(problem._id),
+    }));
+  };
+
   const fetchData = async () => {
     try {
       setIsLoading(true);
@@ -46,12 +75,16 @@ export function StudentDashboard({
         getDualityUserSubmissions()
       ]);
 
-      if (questionsRes.success) setProblems(questionsRes.data);
+      const submissionsData: SubmissionRecord[] = submissionsRes.success ? submissionsRes.data : [];
+
+      if (questionsRes.success) {
+        setProblems(withSolvedFlags(questionsRes.data, submissionsData));
+      }
       if (userRes.success) {
         setUser(userRes.data);
         localStorage.setItem('dualityUser', JSON.stringify(userRes.data));
       }
-      if (submissionsRes.success) setSubmissions(submissionsRes.data);
+      if (submissionsRes.success) setSubmissions(submissionsData);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -61,18 +94,36 @@ export function StudentDashboard({
 
   useEffect(() => {
     fetchData();
+    dualitySocketService.connect();
 
     // Socket listeners
-    dualitySocketService.onSubmissionUpdate((data: any) => {
+    const unsubscribeSubmission = dualitySocketService.onSubmissionUpdate((data: any) => {
       // If it's my submission, refresh
-      if (data.user.id === user.id || data.user.id === user._id) {
+      const eventUserId = data?.user?.id || data?.user?._id || null;
+      const currentUserId = getCurrentUserId();
+
+      if (!eventUserId || !currentUserId || eventUserId === currentUserId) {
+        // Optimistic solved-state update for accepted submissions.
+        if (data?.status?.toLowerCase() === 'accepted') {
+          const questionId = typeof data?.question === 'string'
+            ? data.question
+            : (data?.question?.id || data?.question?._id);
+          if (questionId) {
+            setProblems((prev) => prev.map((p) => (p._id === questionId ? { ...p, solved: true } : p)));
+          }
+        }
         fetchData();
       }
     });
 
-    dualitySocketService.onQuestionUpdate(() => {
+    const unsubscribeQuestion = dualitySocketService.onQuestionUpdate(() => {
       fetchData();
     });
+
+    return () => {
+      unsubscribeSubmission?.();
+      unsubscribeQuestion?.();
+    };
   }, []);
 
   const categories = ['All', ...Array.from(new Set(problems.map(p => p.category)))];
@@ -80,7 +131,11 @@ export function StudentDashboard({
   const filteredProblems = problems.filter(problem => {
     const matchesDifficulty = selectedDifficulty === 'All' || problem.difficulty === selectedDifficulty;
     const matchesCategory = selectedCategory === 'All' || problem.category === selectedCategory;
-    return matchesDifficulty && matchesCategory;
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const matchesSearch = normalizedSearch.length === 0
+      || problem.title.toLowerCase().includes(normalizedSearch)
+      || problem.category.toLowerCase().includes(normalizedSearch);
+    return matchesDifficulty && matchesCategory && matchesSearch;
   });
 
   const totalCount = problems.length;
@@ -165,7 +220,7 @@ export function StudentDashboard({
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         {activeTab === 'profile' ? (
-          <Profile user={user} submissions={submissions} />
+          <Profile user={user} submissions={submissions} problems={problems} totalProblems={problems.length} />
         ) : activeTab === 'history' ? (
           <SubmissionsHistory />
         ) : (
@@ -233,16 +288,16 @@ export function StudentDashboard({
 
             {/* Filters */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
-              <div className="flex flex-wrap gap-4">
+              <div className="grid grid-cols-3 lg:grid-cols-3 gap-4 items-end">
                 {/* Difficulty Filter */}
                 <div>
                   <label className="block text-xs text-gray-500 mb-2">Difficulty</label>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-3 w-full">
                     {(['All', 'Easy', 'Medium', 'Hard'] as const).map((diff) => (
                       <button
                         key={diff}
                         onClick={() => setSelectedDifficulty(diff)}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${selectedDifficulty === diff
+                        className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${selectedDifficulty === diff
                           ? 'bg-white text-black'
                           : 'bg-zinc-800 text-gray-400 hover:text-white'
                           }`}
@@ -254,17 +309,29 @@ export function StudentDashboard({
                 </div>
 
                 {/* Category Filter */}
-                <div className="flex-1">
+                <div>
                   <label className="block text-xs text-gray-500 mb-2">Category</label>
                   <select
                     value={selectedCategory}
                     onChange={(e) => setSelectedCategory(e.target.value)}
-                    className="w-full max-w-xs bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:border-zinc-600"
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:border-zinc-600"
                   >
                     {categories.map((cat) => (
                       <option key={cat} value={cat}>{cat}</option>
                     ))}
                   </select>
+                </div>
+
+                {/* Search */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-2">Search Problems</label>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search by title or category..."
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-zinc-600"
+                  />
                 </div>
               </div>
             </div>

@@ -20,6 +20,8 @@ import { getDualityUserSubmissions } from '../../services/duality.service';
 export function SubmissionsHistory() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
 
   useEffect(() => {
     const fetchSubmissions = async () => {
@@ -37,22 +39,27 @@ export function SubmissionsHistory() {
     fetchSubmissions();
   }, []);
 
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(submissions.length / pageSize));
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [submissions, currentPage]);
+
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'accepted': return 'bg-green-500/10 text-green-500 border-green-500/30';
-      case 'wrong_answer': return 'bg-red-500/10 text-red-500 border-red-500/30';
+      case 'accepted': return ' text-green-500 ';
+      case 'wrong_answer': return ' text-red-500 ';
       case 'runtime_error': return '';
-      case 'time_limit_exceeded': return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30';
-      default: return 'bg-gray-500/10 text-gray-500 border-gray-500/30';
+      case 'time_limit_exceeded': return ' text-yellow-500 ';
+      default: return ' text-gray-500 ';
     }
   };
 
   const getStatusStyle = (status: string) => {
     if (status.toLowerCase() === 'runtime_error') {
       return {
-        backgroundColor: 'rgba(249, 115, 22, 0.10)',
-        color: 'rgb(249, 115, 22)',
-        borderColor: 'rgba(249, 115, 22, 0.30)',
+        color: 'rgb(249, 115, 22)'
       };
     }
     return undefined;
@@ -68,6 +75,10 @@ export function SubmissionsHistory() {
     }
     return <XCircle className="w-4 h-4" />;
   };
+
+  const totalPages = Math.max(1, Math.ceil(submissions.length / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedSubmissions = submissions.slice(startIndex, startIndex + pageSize);
 
   return (
     <div className="space-y-6">
@@ -94,11 +105,11 @@ export function SubmissionsHistory() {
               </tr>
             </thead>
             <tbody>
-              {submissions.map((submission) => (
+              {paginatedSubmissions.map((submission) => (
                 <tr key={submission._id} className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors">
                   <td className="px-6 py-4">
                     <div
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${getStatusColor(submission.status)} w-fit`}
+                      className={`flex items-center gap-2 px-3 py-1.5 ${getStatusColor(submission.status)} w-fit`}
                       style={getStatusStyle(submission.status)}
                     >
                       {getStatusIcon(submission.status)}
@@ -133,6 +144,41 @@ export function SubmissionsHistory() {
             </tbody>
           </table>
         </div>
+        {!isLoading && submissions.length > pageSize && (
+          <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-800 bg-black/40">
+            <p className="text-xs text-gray-500">
+              Showing {startIndex + 1}-{Math.min(startIndex + pageSize, submissions.length)} of {submissions.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800 text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-700 transition-colors"
+              >
+                Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  onClick={() => setCurrentPage(page)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${currentPage === page
+                    ? 'bg-white text-black'
+                    : 'bg-zinc-800 text-gray-300 hover:bg-zinc-700'
+                    }`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800 text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-zinc-700 transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Stats Summary */}

@@ -4,6 +4,24 @@ const getDualityUser = require('../../models/duality/DualityUser');
 const { runTestCases } = require('../../services/execution.service');
 const { broadcastDualitySubmissionUpdate } = require('../../socket');
 
+const getRunnableTestCases = (question, limit = null) => {
+    const cases = (question.testCases || []).map((tc, i) => ({
+        input: tc.input,
+        expectedOutput: tc.output,
+        id: `test_${i}`,
+    }));
+
+    // Backward-compatible fallback if legacy data has no testCases.
+    const fallbackCases = (question.examples || []).map((ex, i) => ({
+        input: ex.input,
+        expectedOutput: ex.output,
+        id: `example_${i}`,
+    }));
+
+    const runnable = cases.length > 0 ? cases : fallbackCases;
+    return typeof limit === 'number' ? runnable.slice(0, limit) : runnable;
+};
+
 /**
  * Submit code for a question
  * POST /api/duality/submissions
@@ -30,19 +48,18 @@ exports.submitCode = async (req, res) => {
         const DualitySubmission = getDualitySubmission();
         const DualityUser = getDualityUser();
 
-        // 1. Prepare test cases (Both Examples + Hidden Test Cases for Submission)
-        const allTestCases = [
-            ...(question.examples || []).map((ex, i) => ({
-                input: ex.input,
-                expectedOutput: ex.output,
-                id: `example_${i}`
-            })),
-            ...(question.testCases || []).map((tc, i) => ({
-                input: tc.input,
-                expectedOutput: tc.output,
-                id: `test_${i}`
-            }))
-        ];
+        // Track active usage when student interacts with the judge.
+        await DualityUser.findByIdAndUpdate(userId, { lastActiveDate: new Date() });
+
+        // Run only executable testCases. Examples are descriptive in Duality content.
+        const allTestCases = getRunnableTestCases(question);
+
+        if (allTestCases.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No runnable test cases configured for this question',
+            });
+        }
 
         // 2. Execute code synchronously
         const result = await runTestCases(code, language, allTestCases);
@@ -156,6 +173,7 @@ exports.submitCode = async (req, res) => {
 exports.runCode = async (req, res) => {
     try {
         const { questionId, code, language } = req.body;
+        const userId = req.dualityUser._id;
 
         if (!questionId || !code || !language) {
             return res.status(400).json({
@@ -171,22 +189,18 @@ exports.runCode = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Question not found' });
         }
 
-        let testCasesToRun = [];
+        // Run uses a small sample of runnable test cases for quick feedback.
+        const testCasesToRun = getRunnableTestCases(question, 3);
 
-        // For non-admins, only run against public examples, not hidden testCases
-        if (req.dualityUser?.role === 'admin' && question.testCases && question.testCases.length > 0) {
-            testCasesToRun = question.testCases.map((tc, index) => ({
-                input: tc.input,
-                expectedOutput: tc.output,
-                id: index
-            }));
-        } else {
-            testCasesToRun = question.examples.map((ex, index) => ({
-                input: ex.input,
-                expectedOutput: ex.output,
-                id: index
-            }));
+        if (testCasesToRun.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No runnable test cases configured for this question',
+            });
         }
+
+        const DualityUser = getDualityUser();
+        await DualityUser.findByIdAndUpdate(userId, { lastActiveDate: new Date() });
 
         // Execute code
         const result = await runTestCases(code, language, testCasesToRun);

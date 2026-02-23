@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Code2, Plus, Edit2, Trash2, User, LogOut, Settings, BookOpen, Users, Trophy, TrendingUp, Eye } from 'lucide-react';
 
 interface TestCase {
@@ -19,7 +19,6 @@ interface BoilerplateCode {
   java: string;
 }
 
-import { useEffect } from 'react';
 import {
   getDualityQuestions,
   createDualityQuestion,
@@ -45,13 +44,14 @@ interface Student {
   id: string;
   name: string;
   email: string;
+  role?: 'admin' | 'student';
   joinDate: string;
   totalSolved: number;
   easySolved: number;
   mediumSolved: number;
   hardSolved: number;
   streak: number;
-  lastActiveDate: string;
+  lastActiveDate?: string | null;
   rank: number;
 }
 
@@ -68,6 +68,9 @@ export function AdminDashboard({
 }) {
   const [activeTab, setActiveTab] = useState<ActiveTab>('questions');
   const [questions, setQuestions] = useState<Question[]>([]);
+  const [selectedDifficulty, setSelectedDifficulty] = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [students, setStudents] = useState<Student[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -108,8 +111,9 @@ export function AdminDashboard({
     try {
       const result = await getDualityUsers();
       if (result.success) {
+        const studentOnly = result.data.filter((u: any) => (u.role || 'student') === 'student');
         // Add rank based on sorted list
-        const studentsWithRank = result.data.map((s: any, index: number) => ({
+        const studentsWithRank = studentOnly.map((s: any, index: number) => ({
           ...s,
           rank: index + 1
         }));
@@ -123,20 +127,41 @@ export function AdminDashboard({
   useEffect(() => {
     fetchQuestions();
     fetchStudents();
+    dualitySocketService.connect();
 
     // Listen for socket updates
-    dualitySocketService.onSubmissionUpdate(() => {
+    const unsubscribeSubmission = dualitySocketService.onSubmissionUpdate(() => {
       fetchStudents();
     });
 
-    dualitySocketService.onQuestionUpdate(() => {
+    const unsubscribeQuestion = dualitySocketService.onQuestionUpdate(() => {
       fetchQuestions();
     });
 
     return () => {
-      // socket cleanups if necessary (currently dualitySocketService uses shared listeners)
+      unsubscribeSubmission?.();
+      unsubscribeQuestion?.();
     };
   }, []);
+
+  const isSameLocalDate = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate();
+  const today = new Date();
+  const activeTodayCount = students.filter((s) => {
+    if (!s.lastActiveDate) return false;
+    return isSameLocalDate(new Date(s.lastActiveDate), today);
+  }).length;
+  const averageSolved = students.length > 0
+    ? Math.round(students.reduce((acc, s) => acc + (s.totalSolved || 0), 0) / students.length)
+    : 0;
+  const topStreak = students.length > 0 ? Math.max(...students.map((s) => s.streak || 0)) : 0;
+
+  const getDifficultyProgress = (solved: number, total: number) => {
+    if (!total || total <= 0) return 0;
+    return Math.min(100, (solved / total) * 100);
+  };
 
   const handleAddQuestion = async () => {
     try {
@@ -271,6 +296,19 @@ export function AdminDashboard({
     }
   };
 
+  const questionCategories = ['All', ...Array.from(new Set(questions.map((q) => q.category)))];
+
+  const filteredQuestions = questions.filter((question) => {
+    const matchesDifficulty = selectedDifficulty === 'All' || question.difficulty === selectedDifficulty;
+    const matchesCategory = selectedCategory === 'All' || question.category === selectedCategory;
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    const matchesSearch = normalizedSearch.length === 0
+      || question.title.toLowerCase().includes(normalizedSearch)
+      || question.category.toLowerCase().includes(normalizedSearch)
+      || question.description.toLowerCase().includes(normalizedSearch);
+    return matchesDifficulty && matchesCategory && matchesSearch;
+  });
+
   return (
     <div className="min-h-screen bg-black">
       {/* Header */}
@@ -315,7 +353,6 @@ export function AdminDashboard({
 
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2 text-gray-400">
-                <Settings className="w-4 h-4" />
                 <User className="w-4 h-4" />
                 <span className="text-sm">{userName}</span>
               </div>
@@ -403,6 +440,56 @@ export function AdminDashboard({
               </button>
             </div>
 
+            {/* Filters */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
+              <div className="grid grid-cols-3 lg:grid-cols-3 gap-4 items-end">
+                {/* Difficulty Filter */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-2">Difficulty</label>
+                  <div className="flex flex-wrap gap-2 w-full">
+                    {(['All', 'Easy', 'Medium', 'Hard'] as const).map((diff) => (
+                      <button
+                        key={diff}
+                        onClick={() => setSelectedDifficulty(diff)}
+                        className={`px-6 py-2 rounded-lg text-sm font-medium transition-colors ${selectedDifficulty === diff
+                          ? 'bg-white text-black'
+                          : 'bg-zinc-800 text-gray-400 hover:text-white'
+                          }`}
+                      >
+                        {diff}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Category Filter */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-2">Category</label>
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 text-white text-sm focus:outline-none focus:border-zinc-600"
+                  >
+                    {questionCategories.map((cat) => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Search */}
+                <div>
+                  <label className="block text-xs text-gray-500 mb-2">Search Problems</label>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search by title, category, or description..."
+                    className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-2 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-zinc-600"
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Questions Table */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
               <div className="overflow-x-auto">
@@ -417,7 +504,7 @@ export function AdminDashboard({
                     </tr>
                   </thead>
                   <tbody>
-                    {questions.map((question) => (
+                    {filteredQuestions.map((question) => (
                       <tr key={question._id} className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors">
                         <td className="px-6 py-4">
                           <div>
@@ -457,6 +544,12 @@ export function AdminDashboard({
                   </tbody>
                 </table>
               </div>
+
+              {filteredQuestions.length === 0 && (
+                <div className="py-12 text-center text-gray-500">
+                  <p>No questions found with the selected filters.</p>
+                </div>
+              )}
             </div>
           </>
         ) : (
@@ -483,7 +576,7 @@ export function AdminDashboard({
                   <div>
                     <p className="text-xs text-gray-500">Active Today</p>
                     <p className="text-2xl font-bold text-green-500">
-                      {students.filter(s => s.lastActiveDate && s.lastActiveDate.startsWith(new Date().toISOString().split('T')[0])).length}
+                      {activeTodayCount}
                     </p>
                   </div>
                 </div>
@@ -497,7 +590,7 @@ export function AdminDashboard({
                   <div>
                     <p className="text-xs text-gray-500">Avg Problems Solved</p>
                     <p className="text-2xl font-bold text-yellow-500">
-                      {Math.round(students.reduce((acc, s) => acc + s.totalSolved, 0) / students.length)}
+                      {averageSolved}
                     </p>
                   </div>
                 </div>
@@ -511,7 +604,7 @@ export function AdminDashboard({
                   <div>
                     <p className="text-xs text-gray-500">Top Streak</p>
                     <p className="text-2xl font-bold text-purple-500">
-                      {Math.max(...students.map(s => s.streak))}
+                      {topStreak}
                     </p>
                   </div>
                 </div>
@@ -563,12 +656,16 @@ export function AdminDashboard({
                         </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-orange-500">{student.streak}</span>
+                            <span className="text-sm font-medium text-gray-500">{student.streak}</span>
                             <span className="text-xs text-gray-500">days</span>
                           </div>
                         </td>
                         <td className="px-6 py-4">
-                          <span className="text-gray-400">Active {new Date(student.lastActiveDate).toLocaleDateString()}</span>
+                          <span className="text-gray-400">
+                            {student.lastActiveDate
+                              ? `Active ${new Date(student.lastActiveDate).toLocaleString()}`
+                              : 'Never active'}
+                          </span>
                         </td>
                         <td className="px-6 py-4">
                           <button
@@ -879,11 +976,11 @@ export function AdminDashboard({
                 </div>
                 <div className="bg-black border border-zinc-800 rounded-lg p-4">
                   <p className="text-xs text-gray-500 mb-1">Streak</p>
-                  <p className="text-2xl font-bold text-orange-500">{viewingStudent.streak} days</p>
+                  <p className="text-2xl font-bold text-white">{viewingStudent.streak} days</p>
                 </div>
                 <div className="bg-black border border-zinc-800 rounded-lg p-4">
                   <p className="text-xs text-gray-500 mb-1">Join Date</p>
-                  <p className="text-sm font-medium text-white">{viewingStudent.joinDate}</p>
+                  <p className="text-sm font-medium text-white">{new Date(viewingStudent.joinDate).toLocaleDateString()}</p>
                 </div>
               </div>
 
@@ -897,7 +994,10 @@ export function AdminDashboard({
                       <span className="text-white">{viewingStudent.easySolved}</span>
                     </div>
                     <div className="w-full bg-zinc-800 rounded-full h-2">
-                      <div className="bg-green-500 rounded-full h-2" style={{ width: `${(viewingStudent.easySolved / viewingStudent.totalSolved) * 100}%` }}></div>
+                      <div
+                        className="bg-green-500 rounded-full h-2"
+                        style={{ width: `${getDifficultyProgress(viewingStudent.easySolved, viewingStudent.totalSolved)}%` }}
+                      ></div>
                     </div>
                   </div>
                   <div>
@@ -906,7 +1006,10 @@ export function AdminDashboard({
                       <span className="text-white">{viewingStudent.mediumSolved}</span>
                     </div>
                     <div className="w-full bg-zinc-800 rounded-full h-2">
-                      <div className="bg-yellow-500 rounded-full h-2" style={{ width: `${(viewingStudent.mediumSolved / viewingStudent.totalSolved) * 100}%` }}></div>
+                      <div
+                        className="bg-yellow-500 rounded-full h-2"
+                        style={{ width: `${getDifficultyProgress(viewingStudent.mediumSolved, viewingStudent.totalSolved)}%` }}
+                      ></div>
                     </div>
                   </div>
                   <div>
@@ -915,7 +1018,10 @@ export function AdminDashboard({
                       <span className="text-white">{viewingStudent.hardSolved}</span>
                     </div>
                     <div className="w-full bg-zinc-800 rounded-full h-2">
-                      <div className="bg-red-500 rounded-full h-2" style={{ width: `${(viewingStudent.hardSolved / viewingStudent.totalSolved) * 100}%` }}></div>
+                      <div
+                        className="bg-red-500 rounded-full h-2"
+                        style={{ width: `${getDifficultyProgress(viewingStudent.hardSolved, viewingStudent.totalSolved)}%` }}
+                      ></div>
                     </div>
                   </div>
                 </div>
@@ -927,15 +1033,19 @@ export function AdminDashboard({
                 <div className="space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Last Active</span>
-                    <span className="text-white">Active {new Date(viewingStudent.lastActiveDate).toLocaleDateString()}</span>
+                    <span className="text-white">
+                      {viewingStudent.lastActiveDate
+                        ? `Active ${new Date(viewingStudent.lastActiveDate).toLocaleString()}`
+                        : 'Never active'}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Account Created</span>
-                    <span className="text-white">{viewingStudent.joinDate}</span>
+                    <span className="text-white">{new Date(viewingStudent.joinDate).toLocaleDateString()}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-400">Current Streak</span>
-                    <span className="text-orange-500 font-medium">{viewingStudent.streak} days 🔥</span>
+                    <span className="text-white font-medium">{viewingStudent.streak} days 🔥</span>
                   </div>
                 </div>
               </div>
