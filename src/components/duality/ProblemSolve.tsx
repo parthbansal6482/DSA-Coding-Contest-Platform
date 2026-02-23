@@ -32,6 +32,20 @@ interface Problem {
 
 type Language = 'python' | 'c' | 'cpp' | 'java';
 
+const getDualityUserId = (): string => {
+  try {
+    const dualityUser = localStorage.getItem('dualityUser');
+    if (!dualityUser) return 'guest';
+    const parsed = JSON.parse(dualityUser);
+    return parsed?.id || parsed?._id || 'guest';
+  } catch {
+    return 'guest';
+  }
+};
+
+const getDraftStorageKey = (userId: string, problemId: string, language: Language) =>
+  `duality_draft_${userId}_${problemId}_${language}`;
+
 export function ProblemSolve({
   problemId,
   onBack
@@ -46,6 +60,15 @@ export function ProblemSolve({
   const [isRunning, setIsRunning] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const dualityUserId = getDualityUserId();
+
+  const getDraftOrBoilerplate = (lang: Language, currentProblem: Problem | null): string => {
+    if (!currentProblem) return '';
+    const key = getDraftStorageKey(dualityUserId, problemId, lang);
+    const savedDraft = localStorage.getItem(key);
+    if (savedDraft !== null) return savedDraft;
+    return currentProblem.boilerplate?.[lang] || '';
+  };
 
   useEffect(() => {
     const fetchProblem = async () => {
@@ -53,9 +76,7 @@ export function ProblemSolve({
         const result = await getDualityQuestion(problemId);
         if (result.success) {
           setProblem(result.data);
-          // Set initial code based on boilerplate
-          const boilerplate = result.data.boilerplate || {};
-          setCode(boilerplate[selectedLanguage] || '');
+          setCode(getDraftOrBoilerplate(selectedLanguage, result.data));
         }
       } catch (error) {
         console.error('Error fetching problem:', error);
@@ -68,11 +89,15 @@ export function ProblemSolve({
 
   const handleLanguageChange = (lang: Language) => {
     setSelectedLanguage(lang);
-    if (problem?.boilerplate) {
-      setCode(problem.boilerplate[lang] || '');
-    }
+    setCode(getDraftOrBoilerplate(lang, problem));
     setTestResults(null);
   };
+
+  useEffect(() => {
+    if (!problem) return;
+    const key = getDraftStorageKey(dualityUserId, problemId, selectedLanguage);
+    localStorage.setItem(key, code);
+  }, [code, problem, problemId, selectedLanguage, dualityUserId]);
 
   const handleRunCode = async () => {
     setIsRunning(true);

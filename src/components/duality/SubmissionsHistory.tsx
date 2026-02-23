@@ -41,10 +41,21 @@ export function SubmissionsHistory() {
     switch (status.toLowerCase()) {
       case 'accepted': return 'bg-green-500/10 text-green-500 border-green-500/30';
       case 'wrong_answer': return 'bg-red-500/10 text-red-500 border-red-500/30';
-      case 'runtime_error': return 'bg-orange-500/10 text-orange-500 border-orange-500/30';
+      case 'runtime_error': return '';
       case 'time_limit_exceeded': return 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30';
       default: return 'bg-gray-500/10 text-gray-500 border-gray-500/30';
     }
+  };
+
+  const getStatusStyle = (status: string) => {
+    if (status.toLowerCase() === 'runtime_error') {
+      return {
+        backgroundColor: 'rgba(249, 115, 22, 0.10)',
+        color: 'rgb(249, 115, 22)',
+        borderColor: 'rgba(249, 115, 22, 0.30)',
+      };
+    }
+    return undefined;
   };
 
   const getStatusDisplay = (status: string) => {
@@ -86,7 +97,10 @@ export function SubmissionsHistory() {
               {submissions.map((submission) => (
                 <tr key={submission._id} className="border-b border-zinc-800 hover:bg-zinc-800/50 transition-colors">
                   <td className="px-6 py-4">
-                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${getStatusColor(submission.status)} w-fit`}>
+                    <div
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${getStatusColor(submission.status)} w-fit`}
+                      style={getStatusStyle(submission.status)}
+                    >
                       {getStatusIcon(submission.status)}
                       <span className="text-xs font-medium">{getStatusDisplay(submission.status)}</span>
                     </div>
