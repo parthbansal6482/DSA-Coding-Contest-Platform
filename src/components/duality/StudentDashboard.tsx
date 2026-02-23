@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Code2, CheckCircle2, Clock, Trophy, User, LogOut, TrendingUp, Target, BarChart3, FileText } from 'lucide-react';
 import { Profile } from './Profile';
 import { SubmissionsHistory } from './SubmissionsHistory';
-import { getDualityQuestions, dualityGetMe, getDualityUserSubmissions } from '../../services/duality.service';
+import { getDualityQuestions, dualityGetMe, getDualityUserSubmissions, getDualityLeaderboard } from '../../services/duality.service';
 import dualitySocketService from '../../services/dualitySocket.service';
 
 interface Problem {
@@ -18,6 +18,20 @@ interface SubmissionRecord {
   question: string | { _id?: string; id?: string };
 }
 
+interface LeaderboardEntry {
+  id: string;
+  name: string;
+  totalPoints: number;
+  totalSolved: number;
+  rank: number;
+}
+
+const getQuestionPoints = (difficulty: 'Easy' | 'Medium' | 'Hard') => {
+  if (difficulty === 'Easy') return 100;
+  if (difficulty === 'Medium') return 200;
+  return 300;
+};
+
 export function StudentDashboard({
   userName,
   onLogout,
@@ -27,12 +41,13 @@ export function StudentDashboard({
   onLogout: () => void;
   onSolveProblem: (problemId: string) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<'problems' | 'profile' | 'history'>('problems');
+  const [activeTab, setActiveTab] = useState<'problems' | 'profile' | 'history' | 'leaderboard'>('problems');
   const [selectedDifficulty, setSelectedDifficulty] = useState<'All' | 'Easy' | 'Medium' | 'Hard'>('All');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [problems, setProblems] = useState<Problem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
 
   // Get user stats from DualityUser stored in localStorage
   const [user, setUser] = useState<any>(JSON.parse(localStorage.getItem('dualityUser') || '{}'));
@@ -42,6 +57,8 @@ export function StudentDashboard({
   const easyCount = user.easySolved || 0;
   const mediumCount = user.mediumSolved || 0;
   const hardCount = user.hardSolved || 0;
+  const totalPoints = user.totalPoints || 0;
+  const userRank = user.rank || null;
 
   const getCurrentUserId = () => {
     try {
@@ -72,8 +89,9 @@ export function StudentDashboard({
       const [questionsRes, userRes, submissionsRes] = await Promise.all([
         getDualityQuestions(),
         dualityGetMe(),
-        getDualityUserSubmissions()
+        getDualityUserSubmissions(),
       ]);
+      const leaderboardRes = await getDualityLeaderboard();
 
       const submissionsData: SubmissionRecord[] = submissionsRes.success ? submissionsRes.data : [];
 
@@ -85,6 +103,7 @@ export function StudentDashboard({
         localStorage.setItem('dualityUser', JSON.stringify(userRes.data));
       }
       if (submissionsRes.success) setSubmissions(submissionsData);
+      if (leaderboardRes.success) setLeaderboard(leaderboardRes.data);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -198,6 +217,16 @@ export function StudentDashboard({
                   <FileText className="w-4 h-4" />
                   History
                 </button>
+                <button
+                  onClick={() => setActiveTab('leaderboard')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'leaderboard'
+                    ? 'bg-white text-black'
+                    : 'text-gray-400 hover:text-white'
+                    }`}
+                >
+                  <Trophy className="w-4 h-4" />
+                  Leaderboard
+                </button>
               </div>
             </div>
 
@@ -223,6 +252,38 @@ export function StudentDashboard({
           <Profile user={user} submissions={submissions} problems={problems} totalProblems={problems.length} />
         ) : activeTab === 'history' ? (
           <SubmissionsHistory />
+        ) : activeTab === 'leaderboard' ? (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-zinc-800 bg-black/30 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-white">Leaderboard</h2>
+              <div className="text-sm text-gray-400">
+                Your Rank: <span className="text-white font-semibold">{userRank ? `#${userRank}` : '-'}</span> •
+                Points: <span className="text-yellow-500 font-semibold ml-1">{totalPoints}</span>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-black border-b border-zinc-800">
+                  <tr>
+                    <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Rank</th>
+                    <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Student</th>
+                    <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Points</th>
+                    <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Solved</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {leaderboard.map((entry) => (
+                    <tr key={entry.id} className={`border-b border-zinc-800 ${entry.id === user.id ? 'bg-zinc-800/40' : 'hover:bg-zinc-800/20'}`}>
+                      <td className="px-6 py-4 text-white font-semibold">#{entry.rank}</td>
+                      <td className="px-6 py-4 text-white">{entry.name}</td>
+                      <td className="px-6 py-4 text-yellow-500 font-semibold">{entry.totalPoints}</td>
+                      <td className="px-6 py-4 text-gray-300">{entry.totalSolved}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         ) : (
           <>
             {/* Stats Cards */}
@@ -234,8 +295,9 @@ export function StudentDashboard({
                     <Trophy className="w-5 h-5 text-yellow-500" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500">Problems Solved</p>
+                    <p className="text-xs text-gray-500">Problems Solved • Points</p>
                     <p className="text-2xl font-bold text-white">{solvedCount}/{totalCount}</p>
+                    <p className="text-sm text-yellow-500 font-semibold">{totalPoints} pts</p>
                   </div>
                 </div>
                 <div className="w-full bg-zinc-800 rounded-full h-2">
@@ -345,6 +407,7 @@ export function StudentDashboard({
                       <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Status</th>
                       <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Title</th>
                       <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Difficulty</th>
+                      <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Points</th>
                       <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Category</th>
                       <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Action</th>
                     </tr>
@@ -366,6 +429,9 @@ export function StudentDashboard({
                           <span className={`text-sm font-medium ${getDifficultyColor(problem.difficulty)}`}>
                             {problem.difficulty}
                           </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-yellow-500 font-medium">{getQuestionPoints(problem.difficulty)}</span>
                         </td>
                         <td className="px-6 py-4">
                           <span className="text-sm text-gray-400">{problem.category}</span>

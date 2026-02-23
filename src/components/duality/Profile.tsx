@@ -10,6 +10,8 @@ interface User {
   easySolved: number;
   mediumSolved: number;
   hardSolved: number;
+  totalPoints?: number;
+  rank?: number | null;
   streak: number;
   joinDate: string;
   lastActiveDate: string;
@@ -49,6 +51,8 @@ export function Profile({
   const easyProgress = easyTotal > 0 ? Math.min(100, (user.easySolved / easyTotal) * 100) : 0;
   const mediumProgress = mediumTotal > 0 ? Math.min(100, (user.mediumSolved / mediumTotal) * 100) : 0;
   const hardProgress = hardTotal > 0 ? Math.min(100, (user.hardSolved / hardTotal) * 100) : 0;
+  const totalPoints = user.totalPoints || 0;
+  const rank = user.rank || null;
 
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
@@ -83,6 +87,14 @@ export function Profile({
             <p className="text-gray-400 text-sm">Member since {new Date(user.joinDate).toLocaleDateString()}</p>
           </div>
           <div className="flex gap-6">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-yellow-500">{totalPoints}</div>
+              <div className="text-xs text-gray-500">Points</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-white">{rank ? `#${rank}` : '-'}</div>
+              <div className="text-xs text-gray-500">Rank</div>
+            </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-white">{user.streak}</div>
               <div className="text-xs text-gray-500">Day Streak</div>

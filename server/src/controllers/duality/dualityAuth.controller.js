@@ -4,6 +4,45 @@ const getDualityUser = require('../../models/duality/DualityUser');
 const getDualityAllowedEmail = require('../../models/duality/DualityAllowedEmail');
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const POINTS_BY_DIFFICULTY = {
+    Easy: 100,
+    Medium: 200,
+    Hard: 300,
+};
+
+const getUserPoints = (user) =>
+    (user.easySolved || 0) * POINTS_BY_DIFFICULTY.Easy
+    + (user.mediumSolved || 0) * POINTS_BY_DIFFICULTY.Medium
+    + (user.hardSolved || 0) * POINTS_BY_DIFFICULTY.Hard;
+
+const sortByPointsAndActivity = (a, b) => {
+    const pointsDiff = getUserPoints(b) - getUserPoints(a);
+    if (pointsDiff !== 0) return pointsDiff;
+
+    const solvedDiff = (b.totalSolved || 0) - (a.totalSolved || 0);
+    if (solvedDiff !== 0) return solvedDiff;
+
+    const aTime = a.lastActiveDate ? new Date(a.lastActiveDate).getTime() : 0;
+    const bTime = b.lastActiveDate ? new Date(b.lastActiveDate).getTime() : 0;
+    return bTime - aTime;
+};
+
+const mapUserWithPoints = (user, rank) => ({
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    avatar: user.avatar,
+    role: user.role,
+    totalSolved: user.totalSolved,
+    easySolved: user.easySolved,
+    mediumSolved: user.mediumSolved,
+    hardSolved: user.hardSolved,
+    totalPoints: getUserPoints(user),
+    streak: user.streak,
+    joinDate: user.joinDate,
+    lastActiveDate: user.lastActiveDate,
+    rank,
+});
 
 /**
  * Google Login
@@ -111,6 +150,15 @@ exports.googleLogin = async (req, res) => {
             { expiresIn: process.env.JWT_EXPIRE || '7d' }
         );
 
+        let rank = null;
+        if (user.role === 'student') {
+            const DualityUser = getDualityUser();
+            const students = await DualityUser.find({ role: 'student' }).select('easySolved mediumSolved hardSolved totalSolved lastActiveDate').lean();
+            const sortedStudents = students.sort(sortByPointsAndActivity);
+            rank = sortedStudents.findIndex((u) => u._id.toString() === user._id.toString()) + 1;
+            rank = rank > 0 ? rank : null;
+        }
+
         res.status(200).json({
             success: true,
             data: {
@@ -125,6 +173,8 @@ exports.googleLogin = async (req, res) => {
                     easySolved: user.easySolved,
                     mediumSolved: user.mediumSolved,
                     hardSolved: user.hardSolved,
+                    totalPoints: getUserPoints(user),
+                    rank,
                     streak: user.streak,
                     joinDate: user.joinDate,
                 },
@@ -147,6 +197,15 @@ exports.googleLogin = async (req, res) => {
 exports.getMe = async (req, res) => {
     try {
         const user = req.dualityUser;
+        const DualityUser = getDualityUser();
+        let rank = null;
+
+        if (user.role === 'student') {
+            const students = await DualityUser.find({ role: 'student' }).select('easySolved mediumSolved hardSolved totalSolved lastActiveDate').lean();
+            const sortedStudents = students.sort(sortByPointsAndActivity);
+            rank = sortedStudents.findIndex((u) => u._id.toString() === user._id.toString()) + 1;
+            rank = rank > 0 ? rank : null;
+        }
 
         res.status(200).json({
             success: true,
@@ -160,6 +219,8 @@ exports.getMe = async (req, res) => {
                 easySolved: user.easySolved,
                 mediumSolved: user.mediumSolved,
                 hardSolved: user.hardSolved,
+                totalPoints: getUserPoints(user),
+                rank,
                 streak: user.streak,
                 joinDate: user.joinDate,
                 lastActiveDate: user.lastActiveDate,
@@ -182,30 +243,50 @@ exports.getMe = async (req, res) => {
 exports.getAllUsers = async (req, res) => {
     try {
         const DualityUser = getDualityUser();
-        const users = await DualityUser.find({}).sort({ totalSolved: -1 });
+        const users = await DualityUser.find({}).lean();
+        const students = users
+            .filter((u) => (u.role || 'student') === 'student')
+            .sort(sortByPointsAndActivity);
+
+        const admins = users.filter((u) => u.role === 'admin');
+        const rankedStudents = students.map((user, index) => mapUserWithPoints(user, index + 1));
+        const mappedAdmins = admins.map((user) => mapUserWithPoints(user, null));
 
         res.status(200).json({
             success: true,
-            data: users.map(user => ({
-                id: user._id,
-                name: user.name,
-                email: user.email,
-                avatar: user.avatar,
-                role: user.role,
-                totalSolved: user.totalSolved,
-                easySolved: user.easySolved,
-                mediumSolved: user.mediumSolved,
-                hardSolved: user.hardSolved,
-                streak: user.streak,
-                joinDate: user.joinDate,
-                lastActiveDate: user.lastActiveDate,
-            })),
+            data: [...rankedStudents, ...mappedAdmins],
         });
     } catch (error) {
         console.error('Get all users error:', error);
         res.status(500).json({
             success: false,
             message: 'Error fetching users',
+            error: error.message,
+        });
+    }
+};
+
+/**
+ * Get student leaderboard (Admin + Students)
+ * GET /api/duality/auth/leaderboard
+ */
+exports.getLeaderboard = async (req, res) => {
+    try {
+        const DualityUser = getDualityUser();
+        const students = await DualityUser.find({ role: 'student' }).lean();
+        const rankedStudents = students
+            .sort(sortByPointsAndActivity)
+            .map((user, index) => mapUserWithPoints(user, index + 1));
+
+        res.status(200).json({
+            success: true,
+            data: rankedStudents,
+        });
+    } catch (error) {
+        console.error('Get leaderboard error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching leaderboard',
             error: error.message,
         });
     }

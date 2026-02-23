@@ -12,6 +12,11 @@ export const dualityGetMe = async () => {
     return res.data;
 };
 
+export const getDualityLeaderboard = async () => {
+    const res = await api.get('/duality/auth/leaderboard');
+    return res.data;
+};
+
 // ========== ALLOWED EMAILS ==========
 
 export const getAllowedEmails = async () => {

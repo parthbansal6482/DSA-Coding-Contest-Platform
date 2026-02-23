@@ -50,6 +50,7 @@ interface Student {
   easySolved: number;
   mediumSolved: number;
   hardSolved: number;
+  totalPoints: number;
   streak: number;
   lastActiveDate?: string | null;
   rank: number;
@@ -57,7 +58,13 @@ interface Student {
 
 
 
-type ActiveTab = 'questions' | 'students';
+type ActiveTab = 'questions' | 'students' | 'leaderboard';
+
+const getQuestionPoints = (difficulty: 'Easy' | 'Medium' | 'Hard') => {
+  if (difficulty === 'Easy') return 100;
+  if (difficulty === 'Medium') return 200;
+  return 300;
+};
 
 export function AdminDashboard({
   userName,
@@ -155,6 +162,9 @@ export function AdminDashboard({
   }).length;
   const averageSolved = students.length > 0
     ? Math.round(students.reduce((acc, s) => acc + (s.totalSolved || 0), 0) / students.length)
+    : 0;
+  const averagePoints = students.length > 0
+    ? Math.round(students.reduce((acc, s) => acc + (s.totalPoints || 0), 0) / students.length)
     : 0;
   const topStreak = students.length > 0 ? Math.max(...students.map((s) => s.streak || 0)) : 0;
 
@@ -348,6 +358,16 @@ export function AdminDashboard({
                   <Users className="w-4 h-4" />
                   Students
                 </button>
+                <button
+                  onClick={() => setActiveTab('leaderboard')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'leaderboard'
+                    ? 'bg-white text-black'
+                    : 'text-gray-400 hover:text-white'
+                    }`}
+                >
+                  <Trophy className="w-4 h-4" />
+                  Leaderboard
+                </button>
               </div>
             </div>
 
@@ -498,6 +518,7 @@ export function AdminDashboard({
                     <tr>
                       <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Title</th>
                       <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Difficulty</th>
+                      <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Points</th>
                       <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Category</th>
                       <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Test Cases</th>
                       <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Actions</th>
@@ -516,6 +537,9 @@ export function AdminDashboard({
                           <span className={`px-3 py-1 rounded-lg text-xs font-medium ${getDifficultyColor(question.difficulty)}`}>
                             {question.difficulty}
                           </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-yellow-500 font-medium">{getQuestionPoints(question.difficulty)}</span>
                         </td>
                         <td className="px-6 py-4">
                           <span className="text-sm text-gray-400">{question.category}</span>
@@ -552,7 +576,7 @@ export function AdminDashboard({
               )}
             </div>
           </>
-        ) : (
+        ) : activeTab === 'students' ? (
           <>
             {/* Students Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -623,6 +647,7 @@ export function AdminDashboard({
                     <tr>
                       <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Student</th>
                       <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Rank</th>
+                      <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Points</th>
                       <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Total Solved</th>
                       <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Easy/Med/Hard</th>
                       <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Streak</th>
@@ -641,6 +666,9 @@ export function AdminDashboard({
                         </td>
                         <td className="px-6 py-4">
                           <span className="text-sm text-gray-400">#{student.rank}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-lg font-bold text-yellow-500">{student.totalPoints}</span>
                         </td>
                         <td className="px-6 py-4">
                           <span className="text-lg font-bold text-white">{student.totalSolved}</span>
@@ -675,6 +703,54 @@ export function AdminDashboard({
                             <Eye className="w-4 h-4" />
                           </button>
                         </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+                <p className="text-xs text-gray-500 mb-1">Students Ranked</p>
+                <p className="text-2xl font-bold text-white">{students.length}</p>
+              </div>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+                <p className="text-xs text-gray-500 mb-1">Avg Points</p>
+                <p className="text-2xl font-bold text-yellow-500">{averagePoints}</p>
+              </div>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+                <p className="text-xs text-gray-500 mb-1">Top Points</p>
+                <p className="text-2xl font-bold text-yellow-500">{students[0]?.totalPoints || 0}</p>
+              </div>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+                <p className="text-xs text-gray-500 mb-1">Top Rank</p>
+                <p className="text-2xl font-bold text-white">#{students[0]?.rank || '-'}</p>
+              </div>
+            </div>
+
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-black border-b border-zinc-800">
+                    <tr>
+                      <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Rank</th>
+                      <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Student</th>
+                      <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Points</th>
+                      <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Solved</th>
+                      <th className="text-left px-6 py-4 text-xs font-medium text-gray-500">Streak</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {students.map((student) => (
+                      <tr key={`leaderboard-${student.id}`} className="border-b border-zinc-800 hover:bg-zinc-800/30">
+                        <td className="px-6 py-4 text-white font-semibold">#{student.rank}</td>
+                        <td className="px-6 py-4 text-white">{student.name}</td>
+                        <td className="px-6 py-4 text-yellow-500 font-semibold">{student.totalPoints}</td>
+                        <td className="px-6 py-4 text-gray-300">{student.totalSolved}</td>
+                        <td className="px-6 py-4 text-gray-400">{student.streak} days</td>
                       </tr>
                     ))}
                   </tbody>
