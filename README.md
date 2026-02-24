@@ -1,49 +1,96 @@
 # DSA Coding Contest Platform
 
-A full-stack web application for hosting offline Data Structures & Algorithms coding contests with team management, real-time dashboards, and automated code execution.
+A full-stack platform with two products:
+- **Duality**: LeetCode-style individual practice.
+- **Duality Extended**: Team-based timed contests.
 
 ## 🚀 Features
 
-### Duality (Practice Platform)
-- **Google Login**: Role-aware sign-in for Student/Admin in Duality mode.
-- **Student Dashboard**:
-  - Problem list with filters: difficulty, category, and search.
-  - Per-problem points: Easy `100`, Medium `200`, Hard `300`.
-  - Autosave in code editor (draft persists across refresh by user/problem/language).
-  - Submission history with pagination.
-  - Profile with solved ratios, points, rank, and recent activity pagination.
-- **Admin Dashboard**:
-  - Manage Duality question bank (create/edit/delete).
-  - Student analytics and activity tracking.
-  - Real-time leaderboard and ranked student list by points.
-- **Real-time Sync**:
-  - WebSocket updates for submissions, question changes, and leaderboard refresh.
-- **Secure Execution**:
-  - Duality run/submit uses runnable test cases (not descriptive examples) for reliable judging.
+## 📘 Duality (Practice) - Detailed
+
+### Purpose
+Continuous individual DSA practice with coding history, profile growth, and leaderboard ranking.
+
+### Authentication
+- Google OAuth login.
+- Access limited to allowed institutional emails.
+- Roles:
+  - `student`: solve problems, view profile/history/leaderboard.
+  - `admin`: manage question bank and monitor students.
+
+### Student Features
+- Problem list with filters:
+  - Difficulty
+  - Category
+  - Search
+- Per-question points by difficulty:
+  - Easy = `100`
+  - Medium = `200`
+  - Hard = `300`
+- Code solve page:
+  - Run and Submit actions.
+  - Multi-language support: Python, C, C++, Java.
+  - Draft autosave (user + problem + language scoped) across refresh.
+- Submission history table with pagination.
+- Profile:
+  - Solved ratios by difficulty.
+  - Points and rank.
+  - Recent activity with pagination.
+- Student leaderboard tab (real-time updates).
+
+### Admin Features
+- Question management:
+  - Add/Edit/Delete questions.
+  - Difficulty/category/search filters.
+  - Boilerplate, examples, test cases.
+- Students tab:
+  - Per-student solved stats, points, streak, last active.
+  - Admin accounts excluded from student list.
+- Leaderboard tab:
+  - Real-time ranked students by points.
+
+### Scoring & Ranking
+- Total points:
+  - `easySolved*100 + mediumSolved*200 + hardSolved*300`
+- Rank tie-breakers:
+  1. Higher points
+  2. Higher solved count
+  3. More recent activity
+
+### Real-time Behavior
+- Socket updates refresh:
+  - submission outcomes
+  - question updates
+  - leaderboard/state views
+
+## 🏆 Duality Extended (Contest) - Detailed
+
+### Purpose
+Run structured team contests with timed rounds, live standings, and tactical gameplay.
 
 ### Authentication & Security
-- **Admin Dashboard**: Secure management system for administrators.
-- **Team Registration**: Teams of 2-3 members with admin approval workflow.
-- **Single Device Login**: Prevents multiple concurrent logins for the same team account.
-- **JWT-based Security**: Secure token-based authentication and protected API routes.
+- Admin dashboard for contest operators.
+- Team registration (2–3 members) with approval flow.
+- Single-device login protection for team accounts.
+- JWT-protected APIs and role-based access.
 
 ### Contest Management
-- **Rounds Control**: Create and manage multiple contest rounds with timing controls.
-- **Question Bank**: Manage DSA problems with visible examples and hidden test cases.
-- **Real-time Leaderboard**: Live ranking updates based on points and solve time.
-- **System Health**: Automated system monitoring and health checks.
+- Round creation/control (start/end/timing).
+- Contest question bank with visible examples + hidden tests.
+- Real-time leaderboard updates.
+- System health and operational controls.
 
-### Code Execution System
-- **Docker Sandboxing**: Executes user code in isolated containers for maximum security.
-- **Multi-Language Support**: Support for Python, C++, C, and Java.
-- **Submission Queue**: MongoDB-backed queue to manage system load and prevent CPU spikes.
-- **Resource Limits**: Configurable CPU (1 core) and Memory (256MB) limits per execution.
-- **Error Detection**: Specific reporting for Time Limit Exceeded (TLE) and Memory Limit Exceeded (MLE).
+### Submission & Evaluation
+- Docker sandbox execution.
+- Multi-language runtime: Python, C, C++, Java.
+- Queue-backed evaluation to smooth load.
+- Resource caps (CPU + memory) per run.
+- Status handling for WA/TLE/MLE/runtime errors.
 
 ### Tactical Mechanics
-- **Sabotage System**: Teams can buy tokens to sabotage opponents.
-- **Shield Protection**: Defensive tokens to block incoming attacks.
-- **Token Shop**: Currency-based system for purchasing tactical advantages.
+- Sabotage token system.
+- Shield defense mechanics.
+- Token shop and tactical actions during contest runtime.
 
 ## 🛠️ Tech Stack
 
