@@ -4,6 +4,23 @@ A full-stack web application for hosting offline Data Structures & Algorithms co
 
 ## 🚀 Features
 
+### Duality (Practice Platform)
+- **Google Login**: Role-aware sign-in for Student/Admin in Duality mode.
+- **Student Dashboard**:
+  - Problem list with filters: difficulty, category, and search.
+  - Per-problem points: Easy `100`, Medium `200`, Hard `300`.
+  - Autosave in code editor (draft persists across refresh by user/problem/language).
+  - Submission history with pagination.
+  - Profile with solved ratios, points, rank, and recent activity pagination.
+- **Admin Dashboard**:
+  - Manage Duality question bank (create/edit/delete).
+  - Student analytics and activity tracking.
+  - Real-time leaderboard and ranked student list by points.
+- **Real-time Sync**:
+  - WebSocket updates for submissions, question changes, and leaderboard refresh.
+- **Secure Execution**:
+  - Duality run/submit uses runnable test cases (not descriptive examples) for reliable judging.
+
 ### Authentication & Security
 - **Admin Dashboard**: Secure management system for administrators.
 - **Team Registration**: Teams of 2-3 members with admin approval workflow.
@@ -83,6 +100,10 @@ A full-stack web application for hosting offline Data Structures & Algorithms co
 - `/api/questions` - Problem Management
 - `/api/rounds` - Contest Control
 - `/api/submissions` - Code Evaluation & Leaderboard
+- `/api/duality/auth` - Duality Google auth, profile, users, leaderboard
+- `/api/duality/questions` - Duality question management
+- `/api/duality/submissions` - Duality run/submit/history
+- `/api/duality/allowed-emails` - Duality allowlist management
 
 ## 🤝 Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
