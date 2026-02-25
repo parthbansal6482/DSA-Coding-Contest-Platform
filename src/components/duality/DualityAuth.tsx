@@ -11,6 +11,7 @@ declare global {
             client_id: string;
             callback: (response: { credential: string }) => void;
             auto_select?: boolean;
+            ux_mode?: 'popup' | 'redirect';
           }) => void;
           renderButton: (
             element: HTMLElement,
@@ -23,7 +24,8 @@ declare global {
               width?: number;
             }
           ) => void;
-          prompt: () => void;
+          prompt: (callback?: (notification: { isDisplayMoment: () => boolean;[key: string]: any }) => void) => void;
+          disableAutoSelect: () => void;
         };
       };
     };
@@ -52,18 +54,32 @@ export function DualityAuth({
     // Wait for Google Identity Services script to load
     const initializeGoogle = () => {
       if (window.google?.accounts?.id && googleButtonRef.current) {
+
+        // 🔥 Prevent returning user auto sign-in
+        window.google.accounts.id.disableAutoSelect();
+
         window.google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
           callback: handleGoogleResponse,
+          auto_select: false,
+          ux_mode: "popup", // Ensures popup mode
         });
 
-        window.google.accounts.id.renderButton(googleButtonRef.current, {
-          type: 'standard',
-          theme: 'filled_black',
-          size: 'large',
-          text: 'continue_with',
-          shape: 'rectangular',
-          width: 350,
+        window.google.accounts.id.renderButton(
+          googleButtonRef.current,
+          {
+            type: "standard",
+            theme: "filled_black",
+            size: "large",
+            text: "continue_with",
+            shape: "rectangular",
+            width: 350,
+          }
+        );
+
+        // 🔥 Forces Google to show account selection
+        window.google.accounts.id.prompt((notification) => {
+          console.log("Prompt state:", notification);
         });
       }
     };
@@ -90,11 +106,14 @@ export function DualityAuth({
 
     try {
       const result = await dualityGoogleLogin(response.credential);
+      console.log('Duality Auth Result:', result);
 
       if (result.success) {
         // Store the duality token separately from the extended token
         localStorage.setItem('dualityToken', result.data.token);
         localStorage.setItem('dualityUser', JSON.stringify(result.data.user));
+
+        console.log('Logged in as:', result.data.user.email);
 
         onLogin(result.data.user.role, result.data.user.name);
       } else {
@@ -175,7 +194,7 @@ export function DualityAuth({
           {/* Info Text */}
           <div className="space-y-3 text-sm text-gray-500 text-center">
             <p>
-              Only @bmu.edu.in accounts are allowed. 
+              Only @bmu.edu.in accounts are allowed.
             </p>
             <p className="text-xs">
               By continuing, you agree to our Terms of Service and Privacy Policy.

@@ -55,7 +55,9 @@ export default defineConfig({
   },
   server: {
     allowedHosts: [
-      'uninfectiously-rancid-tianna.ngrok-free.dev'
+      'uninfectiously-rancid-tianna.ngrok-free.dev',
+      'caps-chamber-emails-transcript.trycloudflare.com',
+      '.trycloudflare.com'
     ],
     port: 3000,
     open: true,
