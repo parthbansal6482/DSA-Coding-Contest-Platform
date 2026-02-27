@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://ec2-13-233-172-223.ap-south-1.compute.amazonaws.com/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 const dualityApi = axios.create({
     baseURL: API_URL,
