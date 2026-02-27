@@ -87,17 +87,22 @@ exports.submitCode = async (req, res) => {
         const avgTime = result.results.length > 0 ? (result.results.reduce((sum, r) => sum + (r.executionTime || 0), 0) / result.results.length) : 0;
         const maxMem = result.results.length > 0 ? Math.max(...result.results.map(r => r.memoryUsed || 0)) : 0;
 
+        // Ensure we don't save NaN
+        const finalAvgTime = isNaN(avgTime) ? 0 : Math.round(avgTime);
+        const finalMaxMem = isNaN(maxMem) ? 0 : maxMem;
+
         // 4. Save to Database
+        console.log(`[DualitySubmission] Saving submission for user ${userId}, question ${questionId}, status: ${status}`);
         const submission = await DualitySubmission.create({
             user: userId,
             question: questionId,
             code,
             language,
             status,
-            totalTestCases: result.totalTests,
-            testCasesPassed: result.passedTests,
-            executionTime: Math.round(avgTime),
-            memoryUsed: maxMem,
+            totalTestCases: result.totalTests || 0,
+            testCasesPassed: result.passedTests || 0,
+            executionTime: finalAvgTime,
+            memoryUsed: finalMaxMem,
             testResults: result.results,
         });
 
@@ -124,12 +129,14 @@ exports.submitCode = async (req, res) => {
             }
         }
 
-        // 6. Broadcast Update
+        // 6. Broadcast Update - Unify field names with frontend service types
         broadcastDualitySubmissionUpdate(userId, {
             submissionId: submission._id,
             status,
-            totalTests: result.totalTests,
-            passedTests: result.passedTests,
+            totalTestCases: result.totalTests,
+            testCasesPassed: result.passedTests,
+            executionTime: finalAvgTime,
+            memoryUsed: finalMaxMem,
             results: result.results.map(r => ({
                 passed: r.passed,
                 input: r.input,

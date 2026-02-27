@@ -187,6 +187,7 @@ async function execInContainer(container, command, stdin, timeout) {
 
             let stdout = '';
             let stderr = '';
+            let buffer = Buffer.alloc(0);
 
             // Write stdin
             if (stdin) {
@@ -194,14 +195,29 @@ async function execInContainer(container, command, stdin, timeout) {
             }
             stream.end();
 
-            // Collect output
+            // Collect and demux output
             stream.on('data', (chunk) => {
-                const str = chunk.toString();
-                // Docker multiplexes stdout/stderr
-                if (chunk[0] === 1) {
-                    stdout += str.slice(8);
-                } else if (chunk[0] === 2) {
-                    stderr += str.slice(8);
+                buffer = Buffer.concat([buffer, chunk]);
+
+                // Process all complete frames in the buffer
+                while (buffer.length >= 8) {
+                    const type = buffer.readUInt8(0);
+                    const size = buffer.readUInt32BE(4);
+
+                    if (buffer.length < 8 + size) {
+                        // Frame not yet complete, wait for more data
+                        break;
+                    }
+
+                    const payload = buffer.slice(8, 8 + size).toString();
+                    if (type === 1) {
+                        stdout += payload;
+                    } else if (type === 2) {
+                        stderr += payload;
+                    }
+
+                    // Move to next frame
+                    buffer = buffer.slice(8 + size);
                 }
             });
 

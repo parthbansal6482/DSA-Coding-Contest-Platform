@@ -16,6 +16,7 @@ interface Submission {
 
 import { useEffect, useState } from 'react';
 import { getDualityUserSubmissions } from '../../services/duality.service';
+import { dualitySocket } from '../../services/dualitySocket.service';
 
 export function SubmissionsHistory() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -23,20 +24,41 @@ export function SubmissionsHistory() {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
 
-  useEffect(() => {
-    const fetchSubmissions = async () => {
-      try {
-        const result = await getDualityUserSubmissions();
-        if (result.success) {
-          setSubmissions(result.data);
-        }
-      } catch (error) {
-        console.error('Error fetching submissions:', error);
-      } finally {
-        setIsLoading(false);
+  const fetchSubmissions = async () => {
+    try {
+      const result = await getDualityUserSubmissions();
+      if (result.success) {
+        setSubmissions(result.data);
       }
-    };
+    } catch (error) {
+      console.error('Error fetching submissions:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchSubmissions();
+  }, []);
+
+  useEffect(() => {
+    dualitySocket.connect();
+    const unsubscribe = dualitySocket.onSubmissionUpdate((data) => {
+      console.log('[SubmissionsHistory] Received real-time update:', data);
+
+      // Get current user ID to verify ownership
+      const dualityUser = JSON.parse(localStorage.getItem('dualityUser') || '{}');
+      const userId = dualityUser.id || dualityUser._id;
+      const dataUserId = (data as any).user?.id || (data as any).user?._id;
+
+      if (!dataUserId || dataUserId === userId) {
+        fetchSubmissions();
+      }
+    });
+
+    return () => {
+      unsubscribe?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -117,7 +139,7 @@ export function SubmissionsHistory() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-white font-medium">{submission.question.title}</span>
+                    <span className="text-white font-medium">{submission.question?.title || 'Unknown Problem'}</span>
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-sm text-gray-400 font-mono capitalize">{submission.language}</span>
