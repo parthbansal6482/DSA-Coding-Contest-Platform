@@ -125,21 +125,38 @@ Run structured team contests with timed rounds, live standings, and tactical gam
    cd DSA-Coding-Contest-Platform
    npm install
    cd server && npm install
+   cd ..
    ```
 
-2. **Build Code Executor**:
+2. **Configure Environment**:
+   - **Backend**:
+     ```bash
+     cp server/.env.example server/.env
+     ```
+     Edit `server/.env` and fill in:
+     - `MONGODB_URI`: Primary database for contest platform.
+     - `MONGODB_PRACTICE_URI`: Separate database for individual practice.
+     - `JWT_SECRET`: A long random string.
+     - `GOOGLE_CLIENT_ID`: Your Google OAuth Client ID.
+
+   - **Frontend**:
+     ```bash
+     cp .env.example .env
+     ```
+     Edit `.env` and fill in:
+     - `VITE_API_URL`: Set to `http://localhost:5001/api` for local dev.
+     - `VITE_GOOGLE_CLIENT_ID`: Must match the backend ID.
+
+3. **Build Code Executor (Docker)**:
    ```bash
    cd server/docker
    ./build-executor.sh
+   cd ../..
    ```
 
-3. **Configure Environment**:
-   - Backend: Copy `server/.env.example` to `server/.env` and fill in details.
-   - Frontend: Copy `.env.example` to `.env` and set `VITE_API_URL`.
-
 4. **Run Application**:
-   - Backend: `cd server && npm run dev`
-   - Frontend: `npm run dev`
+   - **Backend**: `cd server && npm run dev`
+   - **Frontend**: `npm run dev` (from root)
 
 ## 🔑 API Categories
 - `/api/admin` - Admin Auth & Profile

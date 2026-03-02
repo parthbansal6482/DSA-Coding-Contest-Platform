@@ -191,12 +191,15 @@ curl -X POST http://localhost:5000/api/admin/login \
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `NODE_ENV` | Environment mode | `development` |
-| `PORT` | Server port | `5000` |
-| `MONGODB_URI` | MongoDB connection string | `mongodb://localhost:27017/dsa-contest` |
+| `NODE_ENV` | Environment mode (`development`/`production`) | `development` |
+| `PORT` | Server port | `5001` |
+| `MONGODB_URI` | MongoDB URI for Contest Platform | - |
+| `MONGODB_PRACTICE_URI` | MongoDB URI for Practice Platform | - |
 | `JWT_SECRET` | Secret key for JWT | - |
 | `JWT_EXPIRE` | JWT expiration time | `7d` |
-| `CLIENT_URL` | Frontend URL for CORS | `http://localhost:3000` |
+| `CLIENT_URL` | Primary Frontend URL | `http://localhost:5173` |
+| `ALLOWED_ORIGINS` | Comma-separated allowed origins | `http://localhost:5173,http://localhost:3000` |
+| `GOOGLE_CLIENT_ID` | Google OAuth Client ID | - |
 
 ## License
 
