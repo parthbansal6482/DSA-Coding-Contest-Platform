@@ -3,6 +3,8 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 const connectDB = require('./config/database');
 const { connectPracticeDB } = require('./config/practiceDatabase');
 const {
@@ -143,6 +145,22 @@ app.use('/api/duality/allowed-emails', dualityAllowedEmailRoutes);
 app.use('/api/duality/questions', dualityQuestionRoutes);
 app.use('/api/duality/submissions', dualitySubmissionRoutes);
 
+// Serve frontend build when present (single-container deployment).
+const frontendDistPath = process.env.FRONTEND_DIST_PATH || path.resolve(__dirname, '../../public');
+const hasFrontendBuild = fs.existsSync(frontendDistPath);
+
+if (hasFrontendBuild) {
+    app.use(express.static(frontendDistPath));
+
+    app.get('*', (req, res, next) => {
+        if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+            return next();
+        }
+
+        return res.sendFile(path.join(frontendDistPath, 'index.html'));
+    });
+}
+
 // Health check route
 app.get('/api/health', (req, res) => {
     res.status(200).json({
@@ -175,6 +193,9 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
     console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
     console.log(`WebSocket server ready on port ${PORT}`);
+    if (hasFrontendBuild) {
+        console.log(`Serving frontend build from ${frontendDistPath}`);
+    }
 
     // Start background workers for code execution
     const submissionQueue = require('./services/submissionQueue');

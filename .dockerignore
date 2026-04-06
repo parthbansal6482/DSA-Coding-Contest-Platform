@@ -1,0 +1,16 @@
+.git
+.gitignore
+.DS_Store
+.env
+.env.*
+node_modules
+build
+dist
+coverage
+npm-debug.log*
+yarn-error.log*
+server/node_modules
+server/.env
+server/.env.*
+server/docker-compose.yml
+server/ngrok.log
